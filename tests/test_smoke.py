@@ -1,4 +1,4 @@
-"""M0 smoke tests: the package imports and the CLI skeleton behaves as specified."""
+"""Smoke tests: the package imports and the CLI entry points behave as specified."""
 
 import os
 import subprocess
@@ -8,7 +8,7 @@ from importlib.metadata import version
 import pytest
 
 import care_agent
-from care_agent.cli import EXIT_NOT_IMPLEMENTED, main
+from care_agent.cli import main
 
 
 def test_installed_metadata_version_matches_package_version():
@@ -30,17 +30,23 @@ def test_module_help_runs_and_lists_both_subcommands():
     assert "eval" in result.stdout
 
 
-def test_module_eval_exits_not_implemented_in_a_real_process():
+def test_eval_without_api_key_exits_with_a_clear_configuration_error(tmp_path):
     # Exercises the real entry point (__main__ -> sys.exit(main())), so the exit
-    # code the shell sees is tested, not just main()'s return value.
+    # code the shell sees is tested. Runs in a temp dir so no runs/ folder is left.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("LLM_")}
     result = subprocess.run(
         [sys.executable, "-m", "care_agent", "eval"],
         capture_output=True,
         text=True,
         timeout=60,
+        env=env,
+        cwd=tmp_path,
     )
-    assert result.returncode == EXIT_NOT_IMPLEMENTED == 2
-    assert "'eval' is not implemented yet" in result.stderr
+    assert result.returncode == 2
+    assert "Configuration error" in result.stderr
+    assert "LLM_API_KEY" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "runs").exists()
 
 
 def test_chat_without_api_key_exits_with_a_clear_configuration_error():
@@ -63,9 +69,9 @@ def test_chat_rejects_an_invalid_phone(capsys):
     assert "Invalid --phone" in capsys.readouterr().err
 
 
-def test_eval_placeholder_exits_not_implemented(capsys):
-    assert main(["eval"]) == EXIT_NOT_IMPLEMENTED
-    assert "'eval' is not implemented yet" in capsys.readouterr().err
+def test_eval_rejects_an_unknown_scenario(capsys):
+    assert main(["eval", "--scenario", "E9"]) == 2
+    assert "Unknown scenario" in capsys.readouterr().err
 
 
 def test_chat_requires_phone():

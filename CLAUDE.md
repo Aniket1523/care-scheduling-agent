@@ -60,7 +60,7 @@ python -m care_agent chat --phone +15550100001
 python -m care_agent eval
 ```
 
-(`eval` is a placeholder until the evaluation milestone and exits with code 2.)
+(`eval` needs `LLM_API_KEY`; exit 0 ok, 1 regression, 2 could not run. See docs/EVALUATION.md.)
 
 ## Engineering conventions
 

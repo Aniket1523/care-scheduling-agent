@@ -1,22 +1,17 @@
 """Command-line interface.
 
-Two subcommands, matching the two commands the README must document:
+Two subcommands, matching the two commands the README documents:
 
 * ``chat`` - talk to the scheduling agent as a caller.
-* ``eval`` - run the scenario suite and the regression gate (placeholder until
-  the evaluation milestone; exits with ``EXIT_NOT_IMPLEMENTED``).
+* ``eval`` - run the evaluation scenarios and the regression gate.
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
 from collections.abc import Sequence
 
 from care_agent import __version__
-
-EXIT_OK = 0
-EXIT_NOT_IMPLEMENTED = 2
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,25 +31,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Caller-ID phone number of the simulated incoming call.",
     )
 
-    subcommands.add_parser("eval", help="Run the scenario suite and the regression gate.")
+    evaluate = subcommands.add_parser(
+        "eval", help="Run the evaluation scenarios and the regression gate."
+    )
+    evaluate.add_argument(
+        "--scenario",
+        action="append",
+        metavar="ID",
+        help="Run only this scenario (e.g. E1); repeat for several. Default: all.",
+    )
+    evaluate.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="Record this run's pass/fail results as the new baseline (refused on regression).",
+    )
 
     return parser
-
-
-def _not_implemented(command: str, milestone: str) -> int:
-    print(f"'{command}' is not implemented yet (planned for {milestone}).", file=sys.stderr)
-    return EXIT_NOT_IMPLEMENTED
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    # Imported here so --help stays fast.
     if args.command == "chat":
-        from care_agent.chat import run_chat  # imported here so --help stays fast
+        from care_agent.chat import run_chat
 
         return run_chat(args.phone)
     if args.command == "eval":
-        return _not_implemented("eval", "M4")
+        from care_agent.evals.suite import run_eval
+
+        return run_eval(args.scenario, update_baseline=args.update_baseline)
 
     # argparse rejects unknown subcommands, so this is unreachable.
     raise AssertionError(f"unhandled command: {args.command}")

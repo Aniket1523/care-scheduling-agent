@@ -25,7 +25,11 @@ class GeminiClient:
         settings.require_complete()  # raises ConfigError (no network involved)
         assert settings.api_key is not None
         http_options = types.HttpOptions(
-            timeout=int(settings.timeout_seconds * 1000), base_url=settings.base_url
+            timeout=int(settings.timeout_seconds * 1000),
+            base_url=settings.base_url,
+            # Retry rate limits and transient server errors (an eval run makes many
+            # calls in a row). generate_content has no side effects, so this is safe.
+            retry_options=types.HttpRetryOptions(attempts=4),
         )
         self._client = genai.Client(
             api_key=settings.api_key.get_secret_value(), http_options=http_options

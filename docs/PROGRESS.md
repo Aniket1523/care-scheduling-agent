@@ -66,7 +66,19 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [ ] JSONL traces (deferred to the evaluation milestone)
 - [ ] Tag `v0-baseline` after the real-model check
 
-### M4 — Evaluation harness
+### M3 — Evaluation harness and improvement loop (owner numbering)
+- [x] Scenarios E1-E6 (F1-F5 + cancellation that never commits), explicit EHR expectations
+- [x] Runner: fresh seeded DB, fixed clock, scripted caller, real agent code, model-call count
+- [x] Deterministic grading from EHR state + `claims_match_ehr`; no LLM judge
+- [x] JSONL traces, results.json, failures.json (findings, likely cause, fix layer)
+- [x] Baseline + regression gate (exit 1), `--scenario`, `--update-baseline` (refused on regression)
+- [x] `python -m care_agent eval`; docs/EVALUATION.md; improvements/TEMPLATE.md
+- [x] 16 network-free harness tests (every scenario passes with a well-behaved scripted agent;
+      failures, regressions, model errors, traces)
+- [ ] Honest baseline with real Gemini (owner: needs LLM_API_KEY)
+- [ ] IMP records for genuine failures, reviewed fixes, before/after scores
+
+### M4 — Evaluation harness (original plan, superseded by M3 above)
 - [ ] Scenario JSON schema; 8–10 scenarios
 - [ ] Scripted patient simulator
 - [ ] Graders: state, trace, claim, outcome; gating

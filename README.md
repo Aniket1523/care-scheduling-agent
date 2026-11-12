@@ -5,8 +5,8 @@ something happened unless the (mock) EHR shows that it happened. The repository 
 small in-process mock EHR with fault injection, and an evaluation harness with an improvement loop and a
 regression gate.
 
-> Status: the mock EHR and the scheduling agent work; `eval` is still a placeholder (exits with
-> code 2). See [docs/PROGRESS.md](docs/PROGRESS.md).
+> Status: the mock EHR, the scheduling agent and the evaluation harness work. See
+> [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Requirements
 
@@ -49,6 +49,11 @@ Maria Garcia (DOB 1985-03-14, phone +15550100001, has a check-up booked) and her
 ```bat
 python -m care_agent eval
 ```
+
+Runs six scenarios (one per assignment failure pattern, plus a cancellation that never commits)
+against the real Gemini model, grades them from the EHR state, saves traces and failure reports to
+`runs/`, and exits with code 1 if a scenario that passed in `evals/baseline.json` now fails.
+See [docs/EVALUATION.md](docs/EVALUATION.md) for options, outputs and the improvement loop.
 
 ## Development
 

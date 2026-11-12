@@ -127,6 +127,16 @@ gating checks for unverified claims and duplicate records; scenarios in JSON val
 **Why:** Deterministic, cheap, explainable grading focused on the failure modes that matter.
 **Consequences:** Narrow patient behaviour and single-trial variance are documented blind spots.
 
+## ADR-014a — Evaluation as built (M3)
+**Status:** Accepted (owner's M3 brief)
+**Decision:** Six scenarios E1-E6 defined in Python (`evals/scenarios.py`) instead of JSON: each
+expectation is a small explicit function over EHR state, which JSON could not express without a
+mini-language. Real Gemini model; fixed scripted caller turns; fixed clock; fresh seeded database per
+scenario; one run per scenario. Grading: scenario expectations plus `claims_match_ehr`. A model API
+error makes a scenario `error`, never `fail`, and never changes the baseline. Exit codes: 0 ok,
+1 regression, 2 incomplete.
+**Supersedes:** the JSON scenario format and the 10-scenario list in ADR-014 / ANALYSIS §8.
+
 ## ADR-015 — Regression gate
 **Status:** Accepted
 **Decision:** `evals/baseline.json` records per-scenario pass/fail; `eval` exits non-zero if any
