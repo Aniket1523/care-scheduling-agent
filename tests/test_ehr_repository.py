@@ -91,7 +91,7 @@ def test_failed_patient_insert_is_rolled_back(conn):
     # The patient row is written first; the repeated phone then violates the
     # patient_phones primary key. The whole insert must be undone.
     patient = make_patient(phones=("+15550100001", "+15550100001"))
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(sqlite3.IntegrityError), conn:  # caller-owned transaction
         insert_patient(conn, patient)
     assert get_patient(conn, patient.id) is None
 

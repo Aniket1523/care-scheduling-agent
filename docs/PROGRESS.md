@@ -9,7 +9,7 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 |---|---|---|---|---|
 | Analysis & design (pre-M0) | — | _TBD_ | Done | ANALYSIS.md, DECISIONS.md approved with modifications |
 | M0 Project skeleton | 0.5 h | | Done | Committed `50fc0b3` |
-| M1 Mock EHR | 1.5 h | | In progress | M1a committed `8da4eb8`; M1b (operations) awaiting review: 91 tests pass; Ruff clean; identity per ADR-019 |
+| M1 Mock EHR | 1.5 h | | In progress | M1a `8da4eb8`, M1b `291edfa` committed; M1c (reliability) awaiting review: 113 tests pass; Ruff clean |
 | M2 Tool layer | 1.5 h | | Not started | |
 | M3 Agent + CLI + traces (tag `v0-baseline`) | 1.75 h | | Not started | ADR-006 provider decision needed first |
 | M4 Eval harness | 1.75 h | | Not started | |
@@ -38,14 +38,14 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
       `verification_required` when details are missing; ambiguous stays ambiguous), explicit
       patient creation with duplicate check, book, cancel, atomic reschedule; `EHRError` codes;
       injected clock (`now` argument); 41 service tests
-- [ ] Escalation (with its table)
-- [ ] Remaining tables with their features: idempotency_keys, audit_log
+- [x] M1c: caller-provided `action_id` idempotency for booking and escalation (recorded in the
+      same transaction; replay returns the original; different arguments -> IDEMPOTENCY_CONFLICT);
+      escalation table + creation (one open per call); `FaultPlan` with timeout_before_commit,
+      timeout_after_commit, error_after_commit; `expected_version` on cancel/reschedule checked
+      inside the UPDATE (STALE_VERSION); repository writes now caller-transactional; 22 tests
+- [x] Out-of-band changes: tests make them by calling the service directly on the same database
+- [ ] Audit log table with call_id/action_id (deferred; JSONL traces may be enough)
 - [ ] Seed data module (tests currently seed reference data with plain SQL)
-- [ ] Idempotency records (same transaction as write; key reuse with different hash rejected)
-- [ ] `FaultPlan`: timeout_before_commit, timeout_after_commit, error_after_commit
-- [ ] Optimistic concurrency (`expected_version`)
-- [ ] Out-of-band mutation hooks; audit log with call_id/action_id
-- [ ] Tests for every invariant and fault mode
 
 ### M2 — Tool layer
 - [ ] Typed IDs + Pydantic argument models

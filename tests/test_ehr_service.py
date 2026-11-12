@@ -9,6 +9,7 @@ import pytest
 from care_agent.ehr import repository as repo
 from care_agent.ehr import service
 from care_agent.ehr.service import EHRError, ErrorCode
+from care_agent.ids import new_id
 from ehr_data import (
     NOW,
     PROVIDER_2_ID,
@@ -27,7 +28,8 @@ MARIA_DOB = date(1985, 3, 14)
 
 def add_patient(conn, **overrides):
     patient = make_patient(**overrides)
-    repo.insert_patient(conn, patient)
+    with conn:
+        repo.insert_patient(conn, patient)
     return patient
 
 
@@ -40,7 +42,9 @@ def appointment_count(conn) -> int:
 
 
 def book(conn, patient_id, slot=SLOT_1):
-    return service.book_appointment(conn, patient_id, SERVICE_ID, slot[0], now=NOW)
+    return service.book_appointment(
+        conn, patient_id, SERVICE_ID, slot[0], action_id=new_id("act"), now=NOW
+    )
 
 
 def assert_error(exc_info, code: ErrorCode) -> None:
@@ -213,7 +217,9 @@ def test_book_appointment(conn):
 )
 def test_book_rejects_wrong_id_types(conn, patient_id, service_id, slot_id):
     with pytest.raises(EHRError) as exc_info:
-        service.book_appointment(conn, patient_id, service_id, slot_id, now=NOW)
+        service.book_appointment(
+            conn, patient_id, service_id, slot_id, action_id=new_id("act"), now=NOW
+        )
     assert_error(exc_info, ErrorCode.INVALID_ID)
     assert appointment_count(conn) == 0
 
@@ -226,7 +232,7 @@ def test_book_rejects_missing_records(conn, missing):
         missing
     ]
     with pytest.raises(EHRError) as exc_info:
-        service.book_appointment(conn, now=NOW, **args)
+        service.book_appointment(conn, action_id=new_id("act"), now=NOW, **args)
     assert_error(exc_info, ErrorCode.NOT_FOUND)
     assert appointment_count(conn) == 0
 
@@ -249,7 +255,8 @@ def test_book_rejects_past_slot(conn):
 
 def test_cancelled_slot_can_be_booked_again(conn):
     maria, ana = add_patient(conn), add_patient(conn, first_name="Ana")
-    service.cancel_appointment(conn, book(conn, maria.id).id, now=NOW)
+    first = book(conn, maria.id)
+    service.cancel_appointment(conn, first.id, expected_version=first.version, now=NOW)
     assert book(conn, ana.id).status == "booked"
 
 
@@ -259,7 +266,9 @@ def test_cancelled_slot_can_be_booked_again(conn):
 def test_cancel_appointment(conn):
     maria = add_patient(conn)
     booked = book(conn, maria.id)
-    cancelled = service.cancel_appointment(conn, booked.id, now=NOW, reason="feeling better")
+    cancelled = service.cancel_appointment(
+        conn, booked.id, expected_version=booked.version, now=NOW, reason="feeling better"
+    )
     assert cancelled.status == "cancelled"
     assert cancelled.cancelled_at == NOW
     assert cancelled.cancel_reason == "feeling better"
@@ -272,14 +281,14 @@ def test_cancel_with_service_id_is_rejected_and_changes_nothing(conn):
     maria = add_patient(conn)
     booked = book(conn, maria.id)
     with pytest.raises(EHRError) as exc_info:
-        service.cancel_appointment(conn, SERVICE_ID, now=NOW)
+        service.cancel_appointment(conn, SERVICE_ID, expected_version=1, now=NOW)
     assert_error(exc_info, ErrorCode.INVALID_ID)
     assert repo.get_appointment(conn, booked.id) == booked
 
 
 def test_cancel_missing_appointment(conn):
     with pytest.raises(EHRError) as exc_info:
-        service.cancel_appointment(conn, "apt_nothere", now=NOW)
+        service.cancel_appointment(conn, "apt_nothere", expected_version=1, now=NOW)
     assert_error(exc_info, ErrorCode.NOT_FOUND)
 
 
@@ -287,9 +296,10 @@ def test_cancel_already_cancelled_appointment(conn):
     # F5: the appointment was cancelled earlier (e.g. directly in the EHR).
     maria = add_patient(conn)
     booked = book(conn, maria.id)
-    first = service.cancel_appointment(conn, booked.id, now=NOW)
+    first = service.cancel_appointment(conn, booked.id, expected_version=booked.version, now=NOW)
     with pytest.raises(EHRError) as exc_info:
-        service.cancel_appointment(conn, booked.id, now=NOW)
+        # The caller has re-read it (current version) and tries again anyway.
+        service.cancel_appointment(conn, booked.id, expected_version=first.version, now=NOW)
     assert_error(exc_info, ErrorCode.ALREADY_CANCELLED)
     assert repo.get_appointment(conn, booked.id) == first
 
@@ -297,9 +307,10 @@ def test_cancel_already_cancelled_appointment(conn):
 def test_cancel_past_appointment_is_rejected(conn):
     maria = add_patient(conn)
     past = make_appointment(maria.id, slot=SLOT_PAST)
-    repo.insert_appointment(conn, past)
+    with conn:
+        repo.insert_appointment(conn, past)
     with pytest.raises(EHRError) as exc_info:
-        service.cancel_appointment(conn, past.id, now=NOW)
+        service.cancel_appointment(conn, past.id, expected_version=past.version, now=NOW)
     assert_error(exc_info, ErrorCode.APPOINTMENT_IN_PAST)
     assert repo.get_appointment(conn, past.id) == past
 
@@ -310,7 +321,9 @@ def test_cancel_past_appointment_is_rejected(conn):
 def test_reschedule_moves_appointment_and_frees_old_slot(conn):
     maria, ana = add_patient(conn), add_patient(conn, first_name="Ana")
     booked = book(conn, maria.id)
-    moved = service.reschedule_appointment(conn, booked.id, SLOT_3[0], now=NOW)
+    moved = service.reschedule_appointment(
+        conn, booked.id, SLOT_3[0], expected_version=booked.version, now=NOW
+    )
 
     assert moved.id == booked.id
     assert moved.status == "booked"
@@ -336,7 +349,9 @@ def test_failed_reschedule_leaves_appointment_unchanged(conn, new_slot_id, code)
     booked = book(conn, maria.id)
     book(conn, ana.id, slot=SLOT_2)
     with pytest.raises(EHRError) as exc_info:
-        service.reschedule_appointment(conn, booked.id, new_slot_id, now=NOW)
+        service.reschedule_appointment(
+            conn, booked.id, new_slot_id, expected_version=booked.version, now=NOW
+        )
     assert_error(exc_info, code)
     assert repo.get_appointment(conn, booked.id) == booked
 
@@ -349,15 +364,22 @@ def test_reschedule_is_atomic_when_slot_is_taken_after_the_check(conn, monkeypat
     book(conn, ana.id, slot=SLOT_2)
     monkeypatch.setattr(repo, "slot_is_booked", lambda conn, slot_id: False)
     with pytest.raises(EHRError) as exc_info:
-        service.reschedule_appointment(conn, booked.id, SLOT_2[0], now=NOW)
+        service.reschedule_appointment(
+            conn, booked.id, SLOT_2[0], expected_version=booked.version, now=NOW
+        )
     assert_error(exc_info, ErrorCode.SLOT_UNAVAILABLE)
     assert repo.get_appointment(conn, booked.id) == booked
 
 
 def test_reschedule_cancelled_appointment_is_rejected(conn):
     maria = add_patient(conn)
-    cancelled = service.cancel_appointment(conn, book(conn, maria.id).id, now=NOW)
+    booked = book(conn, maria.id)
+    cancelled = service.cancel_appointment(
+        conn, booked.id, expected_version=booked.version, now=NOW
+    )
     with pytest.raises(EHRError) as exc_info:
-        service.reschedule_appointment(conn, cancelled.id, SLOT_3[0], now=NOW)
+        service.reschedule_appointment(
+            conn, cancelled.id, SLOT_3[0], expected_version=cancelled.version, now=NOW
+        )
     assert_error(exc_info, ErrorCode.ALREADY_CANCELLED)
     assert repo.get_appointment(conn, cancelled.id) == cancelled

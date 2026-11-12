@@ -14,6 +14,7 @@ lead reviews and approves every milestone.
 | 2026-11-12 | Design | Drafted decision records (`docs/design/DECISIONS.md`), progress tracker and `CLAUDE.md`. |
 | 2026-11-12 | M0 | Wrote the project skeleton: `pyproject.toml`, env-based config module, CLI placeholders, pytest tests, Ruff config. |
 | 2026-11-12 | M1a | Wrote typed IDs, Patient/Appointment models, SQLite schema and repository, and 24 tests. Self-review caught two test problems before reporting: an import that only worked under `python -m pytest`, and a "rollback" test that could not fail; the latter was rewritten and checked with a deliberate autocommit mutation. |
+| 2026-11-12 | M1c | Wrote idempotent booking/escalation, fault injection and version-checked cancel/reschedule, and 22 tests. Found that nested `with conn:` blocks commit early in Python's sqlite3, so moved transaction ownership from repository writes to the service. Checked by mutation that the retry tests depend on the idempotency lookup. |
 | 2026-11-12 | M1b | Wrote EHR operations (identity resolution, patient creation, booking, cancellation, atomic rescheduling) and 35 tests. Chose Python-side `casefold()` name matching after noting SQLite's `lower()` only folds ASCII. |
 | 2026-11-12 | M0 review | Reviewed its own M0 code on request; found secret-leak paths via an empirical probe (retained exception context, construction and assignment errors), duplicated version, missing real-process exit-code test, unpinned Ruff. |
 

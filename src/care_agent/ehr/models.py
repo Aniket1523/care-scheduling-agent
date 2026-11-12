@@ -11,7 +11,14 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from care_agent.ids import AppointmentId, PatientId, ProviderId, ServiceId, SlotId
+from care_agent.ids import (
+    AppointmentId,
+    EscalationId,
+    PatientId,
+    ProviderId,
+    ServiceId,
+    SlotId,
+)
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 # Digits with an optional leading "+", 7-15 digits (E.164 length range).
@@ -72,3 +79,16 @@ class Appointment(BaseModel):
         if (self.status == "cancelled") != (self.cancelled_at is not None):
             raise ValueError("cancelled_at must be set if and only if status is 'cancelled'")
         return self
+
+
+class Escalation(BaseModel):
+    """A request for clinic staff to follow up on a call."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: EscalationId
+    call_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    patient_id: PatientId | None = None
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    status: Literal["open", "closed"] = "open"
+    created_at: AwareDatetime

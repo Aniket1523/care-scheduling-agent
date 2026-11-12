@@ -7,8 +7,7 @@ and cancelled_at present exactly when an appointment is cancelled.
 All timestamps are stored as UTC ISO-8601 strings with second precision, so
 string comparison and ORDER BY match chronological order.
 
-Tables for escalations, idempotency keys and the audit log are added with the
-features that use them (later milestones).
+The audit log table is added with the feature that uses it (later milestone).
 """
 
 from __future__ import annotations
@@ -71,6 +70,27 @@ CREATE TABLE IF NOT EXISTS appointments (
 CREATE INDEX IF NOT EXISTS ix_appointments_patient ON appointments(patient_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_one_booking_per_slot
     ON appointments(slot_id) WHERE status = 'booked';
+
+CREATE TABLE IF NOT EXISTS escalations (
+    id          TEXT PRIMARY KEY,
+    call_id     TEXT NOT NULL,
+    patient_id  TEXT REFERENCES patients(id),
+    reason      TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+    created_at  TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_one_open_escalation_per_call
+    ON escalations(call_id) WHERE status = 'open';
+
+-- One row per completed logical action. Written in the same transaction as the
+-- record it created, so "record exists" and "action recorded" never disagree.
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    action_id     TEXT PRIMARY KEY,
+    operation     TEXT NOT NULL,
+    request_hash  TEXT NOT NULL,
+    result_id     TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+);
 """
 
 

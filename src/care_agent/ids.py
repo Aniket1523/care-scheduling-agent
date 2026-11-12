@@ -18,8 +18,10 @@ ProviderId = Annotated[str, StringConstraints(pattern=r"^prv_[A-Za-z0-9]+$")]
 ServiceId = Annotated[str, StringConstraints(pattern=r"^svc_[A-Za-z0-9]+$")]
 SlotId = Annotated[str, StringConstraints(pattern=r"^slot_[A-Za-z0-9]+$")]
 AppointmentId = Annotated[str, StringConstraints(pattern=r"^apt_[A-Za-z0-9]+$")]
+EscalationId = Annotated[str, StringConstraints(pattern=r"^esc_[A-Za-z0-9]+$")]
+ActionId = Annotated[str, StringConstraints(pattern=r"^act_[A-Za-z0-9]+$")]
 
-PREFIXES = frozenset({"pat", "prv", "svc", "slot", "apt"})
+PREFIXES = frozenset({"pat", "prv", "svc", "slot", "apt", "esc", "act"})
 
 
 def new_id(prefix: str) -> str:
