@@ -8,8 +8,8 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 | Phase | Estimate | Actual | Status | Notes |
 |---|---|---|---|---|
 | Analysis & design (pre-M0) | — | _TBD_ | Done | ANALYSIS.md, DECISIONS.md approved with modifications |
-| M0 Project skeleton | 0.5 h | | Awaiting review | 26 tests pass; Ruff clean; review fixes applied |
-| M1 Mock EHR | 1.5 h | | Not started | |
+| M0 Project skeleton | 0.5 h | | Done | Committed `50fc0b3` |
+| M1 Mock EHR | 1.5 h | | In progress | M1a (DB foundation) awaiting review: 50 tests pass; Ruff clean |
 | M2 Tool layer | 1.5 h | | Not started | |
 | M3 Agent + CLI + traces (tag `v0-baseline`) | 1.75 h | | Not started | ADR-006 provider decision needed first |
 | M4 Eval harness | 1.75 h | | Not started | |
@@ -28,10 +28,13 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
       single-source version, real-process CLI exit-code test, Ruff pinned to 0.17.4
 - [x] `docs/AI_USAGE.md` started
 - [x] Test results reported
-- [ ] Owner review; commit
+- [x] Owner review; commit
 
 ### M1 — Mock EHR
-- [ ] Schema with constraints (partial unique indexes, CHECKs, FKs)
+- [x] M1a: typed IDs; Patient/Appointment models; SQLite schema (patients, phones, providers,
+      services, slots, appointments) with FKs, CHECKs and one-booking-per-slot index;
+      repository (insert/get patient, insert/get appointment, list by patient); 24 tests
+- [ ] Remaining tables with their features: escalations, idempotency_keys, audit_log
 - [ ] Seed data + injected clock
 - [ ] Service: patients, slots, book, cancel, atomic reschedule, escalate
 - [ ] Idempotency records (same transaction as write; key reuse with different hash rejected)
