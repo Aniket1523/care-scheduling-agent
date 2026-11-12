@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
 from care_agent.ehr.db import connect, init_db
-from care_agent.ehr.models import Appointment, Patient
 from care_agent.ehr.repository import (
     get_appointment,
     get_patient,
@@ -18,64 +17,7 @@ from care_agent.ehr.repository import (
     list_appointments_for_patient,
 )
 from care_agent.ids import new_id
-
-# Fixed clock value: tests never depend on the real time.
-NOW = datetime(2026, 11, 12, 9, 0, tzinfo=UTC)
-
-PROVIDER_ID = "prv_drlee"
-SERVICE_ID = "svc_cleaning"
-SLOT_1 = ("slot_tue1000", "2026-11-17T10:00:00+00:00", "2026-11-17T10:30:00+00:00")
-SLOT_2 = ("slot_wed0900", "2026-11-18T09:00:00+00:00", "2026-11-18T09:30:00+00:00")
-
-
-@pytest.fixture
-def conn(tmp_path):
-    """A fresh, initialised database file in pytest's temp dir, with reference data.
-
-    Providers, services and slots are inserted with plain SQL: they are fixed
-    reference data, and their repository functions arrive with booking (M1b).
-    """
-    connection = connect(tmp_path / "ehr.sqlite3")
-    init_db(connection)
-    with connection:
-        connection.execute("INSERT INTO providers VALUES (?, ?)", (PROVIDER_ID, "Dr Lee"))
-        connection.execute("INSERT INTO services VALUES (?, ?, ?)", (SERVICE_ID, "Cleaning", 30))
-        connection.executemany(
-            "INSERT INTO slots VALUES (?, ?, ?, ?)",
-            [(slot_id, PROVIDER_ID, start, end) for slot_id, start, end in (SLOT_1, SLOT_2)],
-        )
-    yield connection
-    connection.close()
-
-
-def make_patient(**overrides) -> Patient:
-    fields = {
-        "id": new_id("pat"),
-        "first_name": "Maria",
-        "last_name": "Garcia",
-        "dob": date(1985, 3, 14),
-        "phones": ("+15550100001",),
-        "created_at": NOW,
-    }
-    return Patient(**(fields | overrides))
-
-
-def make_appointment(patient_id: str, slot=SLOT_1, **overrides) -> Appointment:
-    slot_id, start, end = slot
-    fields = {
-        "id": new_id("apt"),
-        "patient_id": patient_id,
-        "provider_id": PROVIDER_ID,
-        "service_id": SERVICE_ID,
-        "slot_id": slot_id,
-        "start_at": start,
-        "end_at": end,
-        "status": "booked",
-        "created_at": NOW,
-        "updated_at": NOW,
-    }
-    return Appointment(**(fields | overrides))
-
+from ehr_data import NOW, SERVICE_ID, SLOT_1, SLOT_2, make_appointment, make_patient
 
 # --- Typed IDs ---------------------------------------------------------------
 

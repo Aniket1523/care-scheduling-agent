@@ -9,7 +9,7 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 |---|---|---|---|---|
 | Analysis & design (pre-M0) | — | _TBD_ | Done | ANALYSIS.md, DECISIONS.md approved with modifications |
 | M0 Project skeleton | 0.5 h | | Done | Committed `50fc0b3` |
-| M1 Mock EHR | 1.5 h | | In progress | M1a (DB foundation) awaiting review: 50 tests pass; Ruff clean |
+| M1 Mock EHR | 1.5 h | | In progress | M1a committed `8da4eb8`; M1b (operations) awaiting review: 91 tests pass; Ruff clean; identity per ADR-019 |
 | M2 Tool layer | 1.5 h | | Not started | |
 | M3 Agent + CLI + traces (tag `v0-baseline`) | 1.75 h | | Not started | ADR-006 provider decision needed first |
 | M4 Eval harness | 1.75 h | | Not started | |
@@ -34,9 +34,13 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [x] M1a: typed IDs; Patient/Appointment models; SQLite schema (patients, phones, providers,
       services, slots, appointments) with FKs, CHECKs and one-booking-per-slot index;
       repository (insert/get patient, insert/get appointment, list by patient); 24 tests
-- [ ] Remaining tables with their features: escalations, idempotency_keys, audit_log
-- [ ] Seed data + injected clock
-- [ ] Service: patients, slots, book, cancel, atomic reschedule, escalate
+- [x] M1b: identity verified by name + DOB with phone as a hint only (ADR-019;
+      `verification_required` when details are missing; ambiguous stays ambiguous), explicit
+      patient creation with duplicate check, book, cancel, atomic reschedule; `EHRError` codes;
+      injected clock (`now` argument); 41 service tests
+- [ ] Escalation (with its table)
+- [ ] Remaining tables with their features: idempotency_keys, audit_log
+- [ ] Seed data module (tests currently seed reference data with plain SQL)
 - [ ] Idempotency records (same transaction as write; key reuse with different hash rejected)
 - [ ] `FaultPlan`: timeout_before_commit, timeout_after_commit, error_after_commit
 - [ ] Optimistic concurrency (`expected_version`)

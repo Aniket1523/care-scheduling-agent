@@ -139,3 +139,16 @@ baseline-passing scenario fails; baseline changes only via `--update-baseline`.
 **Status:** Accepted
 **Decision:** Honest v0 tagged `v0-baseline`; scenarios, failing run and each `IMP-NNN` fix as separate
 commits; final tagged `v1`. No squashing. No capability disabled to manufacture a failure.
+
+## ADR-019 — Identity is verified by name + DOB; phone is only a hint
+**Status:** Accepted (2026-11-12, owner decision during M1b review)
+**Decision:** A patient's identity is verified by first name, last name and date of birth. The
+caller's phone number is a lookup hint only: among name + DOB matches, a record holding that phone is
+preferred, which can separate duplicate records. A phone-only match never verifies identity; if any of
+the three details is missing, `resolve_identity` returns `verification_required` without revealing
+anything about the phone's holders. If the phone belongs to another patient (F3, spouse's phone), the
+name + DOB match decides. Ambiguous matches stay ambiguous. Lookup never creates a patient.
+**Supersedes:** "Identify the caller by caller-ID phone; fall back to name + DOB" in `ANALYSIS.md`
+(§4, §10) and the phone-only `lookup_caller` tool in §7.2, which is revisited in M2.
+**Why:** Caller ID can belong to someone else (F3) and can be spoofed; acting on the wrong patient's
+record is worse than asking two questions.

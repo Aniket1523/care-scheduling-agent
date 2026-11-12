@@ -14,6 +14,7 @@ lead reviews and approves every milestone.
 | 2026-11-12 | Design | Drafted decision records (`docs/design/DECISIONS.md`), progress tracker and `CLAUDE.md`. |
 | 2026-11-12 | M0 | Wrote the project skeleton: `pyproject.toml`, env-based config module, CLI placeholders, pytest tests, Ruff config. |
 | 2026-11-12 | M1a | Wrote typed IDs, Patient/Appointment models, SQLite schema and repository, and 24 tests. Self-review caught two test problems before reporting: an import that only worked under `python -m pytest`, and a "rollback" test that could not fail; the latter was rewritten and checked with a deliberate autocommit mutation. |
+| 2026-11-12 | M1b | Wrote EHR operations (identity resolution, patient creation, booking, cancellation, atomic rescheduling) and 35 tests. Chose Python-side `casefold()` name matching after noting SQLite's `lower()` only folds ASCII. |
 | 2026-11-12 | M0 review | Reviewed its own M0 code on request; found secret-leak paths via an empirical probe (retained exception context, construction and assignment errors), duplicated version, missing real-process exit-code test, unpinned Ruff. |
 
 ## Where AI was wrong and tests caught it
@@ -32,5 +33,6 @@ lead reviews and approves every milestone.
 | 2026-11-12 | Fingerprint of (call, operation, args) decides retry vs. new intention | Unique `action_id` per logical operation, reused across retries; fingerprint only rejects key reuse with different arguments | Guessing intent from arguments can merge a genuine repeat request with an earlier one |
 | 2026-11-12 | Claim guard as structured check plus keyword backstop | Confirmed: structured ledger outcomes are primary; keywords are not relied on | Keyword matching is brittle |
 | 2026-11-12 | uv + mypy; Python 3.14 floor | pip + pytest + Ruff only; `requires-python >= 3.12` | Fewer tools; portability for reviewers |
+| 2026-11-12 | M1b identity lookup treated a unique phone match (no name/DOB) as a matched patient | Phone is only a hint; identity requires first name, last name and DOB; missing details return `verification_required` (ADR-019) | Caller ID can belong to someone else (F3) or be spoofed |
 | 2026-11-12 | Small custom `.env` reader | Removed; read environment variables directly (`python-dotenv` later if needed) | Avoid unnecessary code |
 | 2026-11-12 | PowerShell commands in docs | Windows CMD commands | Developer's actual shell |

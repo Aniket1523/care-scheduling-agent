@@ -20,6 +20,23 @@ Phone = Annotated[str, StringConstraints(pattern=r"^\+?[0-9]{7,15}$")]
 AppointmentStatus = Literal["booked", "cancelled"]
 
 
+class Service(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: ServiceId
+    name: Name
+    duration_min: int = Field(gt=0)
+
+
+class Slot(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: SlotId
+    provider_id: ProviderId
+    start_at: AwareDatetime
+    end_at: AwareDatetime
+
+
 class Patient(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

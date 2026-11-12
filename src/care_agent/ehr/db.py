@@ -8,7 +8,7 @@ All timestamps are stored as UTC ISO-8601 strings with second precision, so
 string comparison and ORDER BY match chronological order.
 
 Tables for escalations, idempotency keys and the audit log are added with the
-features that use them (M1b/M1c).
+features that use them (later milestones).
 """
 
 from __future__ import annotations
