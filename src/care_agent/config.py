@@ -34,8 +34,12 @@ _ENV_TO_FIELD = {
 }
 _FIELD_TO_ENV = {field: env for env, field in _ENV_TO_FIELD.items()}
 
+# The only supported provider (ADR-006) and its default model.
+SUPPORTED_PROVIDER = "gemini"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
+
 # Variables that must be set before an LLM client can be built.
-_REQUIRED_FOR_CLIENT = (ENV_PROVIDER, ENV_MODEL, ENV_API_KEY)
+_REQUIRED_FOR_CLIENT = (ENV_API_KEY,)
 
 
 class ConfigError(Exception):
@@ -47,8 +51,8 @@ class LLMSettings(BaseModel):
     # must never echo the offending value, which could be a secret.
     model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
-    provider: str | None = None
-    model: str | None = None
+    provider: str = SUPPORTED_PROVIDER
+    model: str = DEFAULT_MODEL
     api_key: SecretStr | None = None
     base_url: str | None = None
     timeout_seconds: float = Field(default=30.0, gt=0)
@@ -95,4 +99,8 @@ class LLMSettings(BaseModel):
         if missing:
             raise ConfigError(
                 "Missing LLM configuration. Set these environment variables: " + ", ".join(missing)
+            )
+        if self.provider != SUPPORTED_PROVIDER:
+            raise ConfigError(
+                f"{ENV_PROVIDER} must be '{SUPPORTED_PROVIDER}' (the only supported provider)"
             )

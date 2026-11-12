@@ -1,5 +1,6 @@
 """M0 smoke tests: the package imports and the CLI skeleton behaves as specified."""
 
+import os
 import subprocess
 import sys
 from importlib.metadata import version
@@ -42,9 +43,24 @@ def test_module_eval_exits_not_implemented_in_a_real_process():
     assert "'eval' is not implemented yet" in result.stderr
 
 
-def test_chat_placeholder_exits_not_implemented(capsys):
-    assert main(["chat", "--phone", "+15550100001"]) == EXIT_NOT_IMPLEMENTED
-    assert "'chat' is not implemented yet" in capsys.readouterr().err
+def test_chat_without_api_key_exits_with_a_clear_configuration_error():
+    env = {k: v for k, v in os.environ.items() if not k.startswith("LLM_")}
+    result = subprocess.run(
+        [sys.executable, "-m", "care_agent", "chat", "--phone", "+15550100001"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=env,
+    )
+    assert result.returncode == 1
+    assert "Configuration error" in result.stderr
+    assert "LLM_API_KEY" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_chat_rejects_an_invalid_phone(capsys):
+    assert main(["chat", "--phone", "not-a-phone"]) == 2
+    assert "Invalid --phone" in capsys.readouterr().err
 
 
 def test_eval_placeholder_exits_not_implemented(capsys):

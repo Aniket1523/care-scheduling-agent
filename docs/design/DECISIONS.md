@@ -51,10 +51,14 @@ API access.
 **Consequences:** Unit tests require no key; `chat` and `eval` fail fast with a clear message if
 configuration is missing.
 
-## ADR-006 — First LLM provider adapter
-**Status:** Pending (decide before M3)
-**Question:** Which provider SDK/adapter to implement first (depends on which API key the owner has).
-**Constraint:** Adapter is isolated behind `LLMClient`; adding a second provider must not touch agent code.
+## ADR-006 — LLM provider: Google Gemini only
+**Status:** Accepted (owner decision, M2)
+**Decision:** Google Gemini through the `google-genai` SDK; default model `gemini-3.1-flash-lite`;
+key from `LLM_API_KEY`. No multi-provider abstraction: the agent loop works on google-genai
+`types.Content` directly, and the only seam is a one-method `ModelClient` protocol so tests can inject
+a scripted fake. Tools are sent as JSON-schema declarations with automatic function calling disabled;
+the agent dispatches tool calls itself.
+**Consequences:** Switching provider later means replacing `GeminiClient` and the history types.
 
 ## ADR-007 — Typed ID prefixes + Pydantic validation
 **Status:** Accepted
@@ -91,6 +95,10 @@ and the EHR duplicate check.
 record back; `verified=true` only if backend state matches. Outcomes are recorded in a per-call
 `OutcomeLedger` (`pending | verified_success | failed | unknown`).
 **Why:** Defines "it happened" as "the backend shows it", per R5.
+**Clarification (M2, real Gemini run):** `verified` and `action_id` appear only on results of write
+tools. A successful identity check had carried `verified: false` (meant for writes), and Gemini told
+a verified caller no record was found. Reads now omit both fields; `verify_identity` reports
+`identity_status` (`verified`, `not_found`, `ambiguous`, `verification_required`, `not_checked`).
 
 ## ADR-011 — Structured claim guard
 **Status:** Accepted (modified per review)

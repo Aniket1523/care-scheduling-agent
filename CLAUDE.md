@@ -40,7 +40,7 @@ The core invariant: **the agent never tells a patient something happened unless 
 
 - `requires-python >= 3.12`; developed on Python 3.14.10 in the existing `.venv` (Windows).
 - Dependencies in `pyproject.toml`.
-- Runtime: Pydantic; one LLM provider SDK (chosen at M3, ADR-006).
+- Runtime: Pydantic; google-genai (Gemini is the only provider, ADR-006).
 - Dev: pytest, Ruff. No uv, no mypy, no ORM, no agent framework, no FastAPI, no `.env` loader.
 - Configuration is read directly from environment variables (see `.env.example` for names).
 
@@ -55,14 +55,12 @@ python -m pip install -e ".[dev]"
 python -m pytest
 python -m ruff check .
 python -m ruff format --check .
-set LLM_PROVIDER=...
-set LLM_MODEL=...
 set LLM_API_KEY=...
 python -m care_agent chat --phone +15550100001
 python -m care_agent eval
 ```
 
-(`chat` works from M3, `eval` from M4; before that they exit with code 2.)
+(`eval` is a placeholder until the evaluation milestone and exits with code 2.)
 
 ## Engineering conventions
 
@@ -73,7 +71,9 @@ python -m care_agent eval
 - Every write is verified by read-back; outcomes go to the per-call `OutcomeLedger`.
 - Patient replies go through `reply_to_patient(message, confirmed_action_ids)`; the claim guard checks
   them against the ledger (ADR-011).
-- Tools return the `ToolResult` envelope (`ok | failed | unknown_outcome`, `verified`, `error.code`).
+- Tools return the `ToolResult` envelope (`status`, `data`, `error.code`). `action_id` and `verified`
+  appear only on write results (verified = a fresh EHR read confirmed the change); `verify_identity`
+  reports `identity_status` instead.
 - Every trace event and EHR audit row carries `call_id`.
 - Timestamps come from an injected clock; SQLite files live in a system temp dir, not in OneDrive.
 - Evaluation grading is deterministic (backend state, trace, structured claims). No LLM judge without approval.

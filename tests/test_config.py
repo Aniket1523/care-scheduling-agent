@@ -6,12 +6,12 @@ import traceback
 import pytest
 from pydantic import ValidationError
 
-from care_agent.config import ConfigError, LLMSettings
+from care_agent.config import DEFAULT_MODEL, ConfigError, LLMSettings
 
 SECRET = "sk-test-DO-NOT-LEAK-123"
 
 FULL_ENV = {
-    "LLM_PROVIDER": "example-provider",
+    "LLM_PROVIDER": "gemini",
     "LLM_MODEL": "example-model",
     "LLM_API_KEY": SECRET,
     "LLM_BASE_URL": "https://llm.example.test/v1",
@@ -22,8 +22,8 @@ FULL_ENV = {
 
 def test_empty_environment_uses_defaults():
     settings = LLMSettings.from_env({})
-    assert settings.provider is None
-    assert settings.model is None
+    assert settings.provider == "gemini"
+    assert settings.model == DEFAULT_MODEL
     assert settings.api_key is None
     assert settings.base_url is None
     assert settings.timeout_seconds == 30.0
@@ -32,7 +32,7 @@ def test_empty_environment_uses_defaults():
 
 def test_full_environment_is_parsed():
     settings = LLMSettings.from_env(FULL_ENV)
-    assert settings.provider == "example-provider"
+    assert settings.provider == "gemini"
     assert settings.model == "example-model"
     assert settings.api_key is not None
     assert settings.api_key.get_secret_value() == SECRET
@@ -43,7 +43,7 @@ def test_full_environment_is_parsed():
 
 def test_blank_values_are_treated_as_unset():
     settings = LLMSettings.from_env({"LLM_MODEL": "   ", "LLM_TIMEOUT_SECONDS": ""})
-    assert settings.model is None
+    assert settings.model == DEFAULT_MODEL
     assert settings.timeout_seconds == 30.0
 
 
@@ -59,13 +59,19 @@ def test_reads_os_environ_by_default(monkeypatch):
 
 def test_incomplete_config_loads_but_cannot_build_a_client():
     settings = LLMSettings.from_env({"LLM_MODEL": "example-model"})
-    assert settings.missing_for_client() == ["LLM_PROVIDER", "LLM_API_KEY"]
+    assert settings.missing_for_client() == ["LLM_API_KEY"]
     with pytest.raises(ConfigError) as exc_info:
         settings.require_complete()
     message = str(exc_info.value)
-    assert "LLM_PROVIDER" in message
     assert "LLM_API_KEY" in message
     assert "LLM_MODEL" not in message
+
+
+def test_unsupported_provider_cannot_build_a_client():
+    settings = LLMSettings.from_env(FULL_ENV | {"LLM_PROVIDER": "other"})
+    with pytest.raises(ConfigError) as exc_info:
+        settings.require_complete()
+    assert "LLM_PROVIDER" in str(exc_info.value)
 
 
 def test_complete_config_passes_requirement_check():

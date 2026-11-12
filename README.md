@@ -5,8 +5,8 @@ something happened unless the (mock) EHR shows that it happened. The repository 
 small in-process mock EHR with fault injection, and an evaluation harness with an improvement loop and a
 regression gate.
 
-> Status: **M0 – project skeleton.** The `chat` and `eval` commands are placeholders and exit with
-> code 2 until milestones M3 and M4. See [docs/PROGRESS.md](docs/PROGRESS.md).
+> Status: the mock EHR and the scheduling agent work; `eval` is still a placeholder (exits with
+> code 2). See [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Requirements
 
@@ -23,22 +23,26 @@ python -m pip install -e ".[dev]"
 
 ## Configuration
 
-The agent reads its LLM configuration directly from environment variables. Nothing is read from files;
-[.env.example](.env.example) lists the names. Never commit a real key.
+The agent uses Google Gemini and reads its configuration directly from environment variables.
+Nothing is read from files; [.env.example](.env.example) lists the names. Never commit a real key.
 
 ```bat
-set LLM_PROVIDER=<provider>
-set LLM_MODEL=<model>
-set LLM_API_KEY=<your key>
+set LLM_API_KEY=<your Gemini API key>
 ```
 
-Optional: `LLM_BASE_URL`, `LLM_TIMEOUT_SECONDS` (default 30), `LLM_TEMPERATURE` (default 0).
+Optional: `LLM_MODEL` (default `gemini-3.1-flash-lite`), `LLM_PROVIDER` (only `gemini`),
+`LLM_BASE_URL`, `LLM_TIMEOUT_SECONDS` (default 30), `LLM_TEMPERATURE` (default 0).
+Tests never call the API and need no key.
 
 ## Run the agent
 
 ```bat
 python -m care_agent chat --phone +15550100001
 ```
+
+Each run is a fresh simulated call against a new demo EHR (deleted when the call ends). Demo patients:
+Maria Garcia (DOB 1985-03-14, phone +15550100001, has a check-up booked) and her husband Luis Garcia
+(DOB 1983-07-02, phone +15550100002). Type `quit` to hang up.
 
 ## Run the evaluation loop
 

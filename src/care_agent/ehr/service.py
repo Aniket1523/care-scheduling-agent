@@ -75,7 +75,7 @@ _ID_TYPES: dict[str, tuple[TypeAdapter[str], str]] = {
 }
 
 
-def _check_id(field: str, value: str) -> str:
+def check_id(field: str, value: str) -> str:
     adapter, prefix = _ID_TYPES[field]
     try:
         return adapter.validate_python(value)
@@ -275,10 +275,10 @@ def book_appointment(
     Repeating the call with the same ``action_id`` and arguments returns the
     appointment the first call created (as it is now), without booking again.
     """
-    patient_id = _check_id("patient_id", patient_id)
-    service_id = _check_id("service_id", service_id)
-    slot_id = _check_id("slot_id", slot_id)
-    action_id = _check_id("action_id", action_id)
+    patient_id = check_id("patient_id", patient_id)
+    service_id = check_id("service_id", service_id)
+    slot_id = check_id("slot_id", slot_id)
+    action_id = check_id("action_id", action_id)
     operation = "book_appointment"
     request_hash = _request_hash(
         {"patient_id": patient_id, "service_id": service_id, "slot_id": slot_id}
@@ -335,7 +335,7 @@ def cancel_appointment(
     faults: FaultPlan | None = None,
 ) -> Appointment:
     """Cancel a booked, future appointment that is still at ``expected_version``."""
-    appointment_id = _check_id("appointment_id", appointment_id)
+    appointment_id = check_id("appointment_id", appointment_id)
 
     def body() -> Appointment:
         appointment = _get_current_booked_future(conn, appointment_id, expected_version, now)
@@ -360,8 +360,8 @@ def reschedule_appointment(
     On any failure the appointment is left exactly as it was: still booked,
     in its original slot.
     """
-    appointment_id = _check_id("appointment_id", appointment_id)
-    new_slot_id = _check_id("slot_id", new_slot_id)
+    appointment_id = check_id("appointment_id", appointment_id)
+    new_slot_id = check_id("slot_id", new_slot_id)
 
     def body() -> Appointment:
         appointment = _get_current_booked_future(conn, appointment_id, expected_version, now)
@@ -444,9 +444,9 @@ def create_escalation(
     action for a call that already has one returns that escalation rather than
     opening a second (F2).
     """
-    action_id = _check_id("action_id", action_id)
+    action_id = check_id("action_id", action_id)
     if patient_id is not None:
-        patient_id = _check_id("patient_id", patient_id)
+        patient_id = check_id("patient_id", patient_id)
     operation = "create_escalation"
     request_hash = _request_hash(
         {"call_id": call_id.strip(), "patient_id": patient_id, "reason": reason.strip()}

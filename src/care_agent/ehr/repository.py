@@ -114,6 +114,34 @@ def slot_is_booked(conn: sqlite3.Connection, slot_id: str) -> bool:
     return row is not None
 
 
+def list_services(conn: sqlite3.Connection) -> list[Service]:
+    rows = conn.execute("SELECT id, name, duration_min FROM services ORDER BY name").fetchall()
+    return [Service.model_validate(dict(row)) for row in rows]
+
+
+def get_provider_name(conn: sqlite3.Connection, provider_id: str) -> str | None:
+    row = conn.execute("SELECT name FROM providers WHERE id = ?", (provider_id,)).fetchone()
+    return None if row is None else row["name"]
+
+
+def list_open_slots(
+    conn: sqlite3.Connection, after: datetime, on_date: date | None = None, limit: int = 8
+) -> list[Slot]:
+    """Free slots starting after ``after``, earliest first. ``on_date`` is a UTC date."""
+    sql = (
+        "SELECT id, provider_id, start_at, end_at FROM slots s WHERE start_at > ? "
+        "AND NOT EXISTS (SELECT 1 FROM appointments a "
+        "WHERE a.slot_id = s.id AND a.status = 'booked')"
+    )
+    params: list[object] = [to_db_time(after)]
+    if on_date is not None:
+        sql += " AND substr(start_at, 1, 10) = ?"
+        params.append(on_date.isoformat())
+    sql += " ORDER BY start_at, id LIMIT ?"
+    params.append(limit)
+    return [Slot.model_validate(dict(row)) for row in conn.execute(sql, params).fetchall()]
+
+
 # --- Appointments ----------------------------------------------------------------
 
 

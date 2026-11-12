@@ -2,10 +2,9 @@
 
 Two subcommands, matching the two commands the README must document:
 
-* ``chat`` - talk to the scheduling agent as a caller (implemented in M3).
-* ``eval`` - run the scenario suite and the regression gate (implemented in M4).
-
-Both are placeholders in M0 and exit with ``EXIT_NOT_IMPLEMENTED``.
+* ``chat`` - talk to the scheduling agent as a caller.
+* ``eval`` - run the scenario suite and the regression gate (placeholder until
+  the evaluation milestone; exits with ``EXIT_NOT_IMPLEMENTED``).
 """
 
 from __future__ import annotations
@@ -51,7 +50,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "chat":
-        return _not_implemented("chat", "M3")
+        from care_agent.chat import run_chat  # imported here so --help stays fast
+
+        return run_chat(args.phone)
     if args.command == "eval":
         return _not_implemented("eval", "M4")
 
