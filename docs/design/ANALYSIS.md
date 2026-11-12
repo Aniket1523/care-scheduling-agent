@@ -144,7 +144,9 @@ Key choices (details and rejected alternatives in `DECISIONS.md`):
 - In-process EHR, no FastAPI: same semantics (incl. "committed but client saw a timeout"), deterministic, fast.
 - `sqlite3` stdlib, explicit SQL, no ORM; fresh DB file in a temp dir per run (not in OneDrive).
 - Custom tool loop, no agent framework.
-- Python 3.14 in the existing `.venv`; pip + `pyproject.toml`; pytest + Ruff. No uv, no mypy.
+- `requires-python >= 3.12`, developed on Python 3.14.10 in the existing `.venv`; pip + `pyproject.toml`;
+  pytest + Ruff. No uv, no mypy. Developer shell: Windows CMD.
+- Configuration read directly from environment variables (no `.env` loader for now).
 
 ## 7. Contracts
 
@@ -211,25 +213,24 @@ Every operational tool returns a `ToolResult`:
 
 ### 7.3 Action identity and idempotency (modified per review)
 
-- The tool layer mints an **`action_id`** (`act_…`) for each **logical operation**. The LLM never supplies
-  idempotency keys.
-- The EHR idempotency key is derived from the `action_id`. **Internal retries** (timeout / after-commit
-  error) reuse it, so a retry can never create a second record.
-- Each write has a **fingerprint** = (call_id, operation, normalised target arguments). When the LLM invokes
-  a write, the tool layer checks the ledger for the same fingerprint:
-
-| Existing ledger entry for fingerprint | Behaviour |
-|---|---|
-| none | New logical operation → new `action_id` |
-| `pending` / `unknown` | Same logical operation → reuse `action_id`; reconcile first, then retry with the same key |
-| `verified_success` | Return the existing verified outcome; no new write |
-| `failed` (definitively not committed) | New attempt → new `action_id` (safe: nothing was committed) |
-
-- A different fingerprint (e.g. a second booking for a different slot) is a genuinely new intention → new `action_id`.
+- Every **logical operation** gets a unique **`action_id`** (`act_…`), minted by the tool layer. The EHR
+  idempotency key is derived from it. The LLM never invents keys.
+- **Retries reuse the `action_id`.** This covers the tool layer's internal retries (timeout /
+  after-commit error) and an explicit model-level retry: a write tool accepts an optional `action_id`
+  taken from a previous `ToolResult` (`unknown_outcome` or retryable failure); passing it means "this is
+  the same operation, try again".
+- **A new user intention gets a new `action_id`.** A write call without `action_id` is a new logical
+  operation.
+- **The fingerprint is a guard, not a classifier.** It is the hash of the normalised request arguments,
+  stored with the idempotency key. It is used *only* to reject reuse of an existing key with different
+  arguments (`IDEMPOTENCY_KEY_REUSED`). It is never used to decide whether a call is a retry or a new
+  intention.
+- Domain constraints are the backstop if the model starts a *new* action for what is really the same
+  intention: one booking per slot, one open escalation per call (EHR partial unique indexes).
 - Cross-call duplication (F3 day 2) is not an idempotency problem; it is prevented by identity resolution
   and the EHR duplicate check.
 
-**Write path:** mint/reuse action_id → call EHR with timeout → on timeout / after-commit error, retry with the
+**Write path:** mint (new intention) or reuse (retry) action_id → call EHR with timeout → on timeout / after-commit error, retry with the
 same key (max 2 retries) → if still unknown, **reconcile** (look up by idempotency key / natural key) →
 **read back** the record → set `verified=true` only if the read-back matches → record in OutcomeLedger.
 Unresolvable unknowns are reported to the model as `unknown_outcome` with guidance to tell the patient
@@ -260,8 +261,9 @@ per-call-index, mode) and direct out-of-band mutations.
 
 ### 7.6 LLM configuration (modified per review)
 
-All provider/model/API configuration comes from environment variables (optional local `.env`, git-ignored;
-`.env.example` committed with names only):
+All provider/model/API configuration is read directly from environment variables (`.env.example`
+committed with names only, as documentation; no `.env` loader for now — `python-dotenv` may be added
+later if needed):
 
 | Variable | Purpose |
 |---|---|
@@ -288,7 +290,7 @@ Which provider adapter is implemented first is decided at M3 (see `DECISIONS.md`
 - **No LLM judge initially.** Grading uses:
   1. **Backend state checks** (deterministic): appointment/escalation/patient counts, statuses, no duplicates.
   2. **Trace checks** (deterministic): correct ID types; live read before mutation; no `register_patient`
-     when a match existed; idempotency key reused across retries; no new write for a `verified_success` fingerprint.
+     when a match existed; idempotency key reused across retries of the same action.
   3. **Claim checks** (deterministic): every `confirmed_action_id` in the transcript is `verified_success`
      *and* consistent with final backend state; secondary success-language backstop on reply text.
   4. **Task outcome:** goal achieved, or honestly reported + escalated.

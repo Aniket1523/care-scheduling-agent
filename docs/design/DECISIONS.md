@@ -8,9 +8,12 @@ and a new entry that supersedes the old one.
 
 ## ADR-001 — Language and tooling
 **Status:** Accepted (2026-11-12)
-**Decision:** Python 3.14 (existing `.venv`, 3.14.10). Dependencies declared in `pyproject.toml`, installed
-with `pip install -e ".[dev]"`. Tooling: pytest, Ruff (lint + format). No uv, no mypy.
-**Why:** Matches the existing environment; fewest moving parts.
+**Decision:** `requires-python = ">=3.12"`; development on Python 3.14.10 in the existing `.venv`.
+Dependencies declared in `pyproject.toml`, installed with `pip install -e ".[dev]"`. Tooling: pytest, Ruff
+(lint + format, `target-version = "py312"`). No uv, no mypy. Developer shell is Windows CMD; documented
+commands use CMD syntax.
+**Why:** Matches the existing environment; fewest moving parts; 3.12 floor keeps the code portable for
+reviewers.
 **Consequences:** Type safety comes from Pydantic validation at boundaries and type hints (unchecked
 statically). Revisit mypy only with a specific reason.
 
@@ -40,8 +43,9 @@ implementation drives unit tests without network access.
 ## ADR-005 — Externalised LLM configuration
 **Status:** Accepted
 **Decision:** `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_TIMEOUT_SECONDS`,
-`LLM_TEMPERATURE` from the environment (optional git-ignored `.env`; `.env.example` lists names only).
-The key is never logged and is masked in `repr`.
+`LLM_TEMPERATURE`, read directly from the environment. No `.env` loader for now (`python-dotenv` may be
+added later if needed); `.env.example` documents the names only. The key is never logged and is masked
+in `repr`.
 **Why:** No secrets in the repo; provider/model swappable; Claude Code access is **not** assumed to provide
 API access.
 **Consequences:** Unit tests require no key; `chat` and `eval` fail fast with a clear message if
@@ -66,15 +70,20 @@ it. Ownership of an appointment is checked before cancel/reschedule.
 **Why:** Removes a class of wrong-ID and cross-patient errors.
 
 ## ADR-009 — Action identity and idempotency
-**Status:** Accepted (modified per review)
-**Decision:** The tool layer mints an `action_id` per **logical operation**; the EHR idempotency key is
-derived from it and **reused across retries**. A write fingerprint (call_id, operation, normalised target
-args) decides whether an LLM invocation continues an existing action (`pending`/`unknown` → reuse;
-`verified_success` → return existing outcome) or is a genuinely new intention (no match, or previous
-attempt definitively `failed` → new `action_id`). The LLM never supplies idempotency keys.
+**Status:** Accepted (modified per second review, 2026-11-12)
+**Decision:** A unique `action_id` is minted for each **logical operation**; the EHR idempotency key is
+derived from it and **reused across retries** (internal tool-layer retries, and model-level retries that
+pass back the `action_id` from a previous `ToolResult`). A **new user intention** — a write call without
+an `action_id` — gets a new one. The request **fingerprint** (hash of normalised arguments) is stored with
+the key and used **only** to reject reuse of an existing key with different arguments
+(`IDEMPOTENCY_KEY_REUSED`). It is never used to classify retry vs. new intention.
+**Rejected:** Fingerprint-based retry detection — it guesses intent from arguments, and wrongly merges a
+genuine repeat request with an earlier one (or splits a retry whose arguments were re-phrased).
 **Why:** F2 (retry created a second escalation) and the error-after-commit requirement.
-**Consequences:** Cross-call duplicates (F3) are handled by identity resolution and the EHR duplicate
-check, not by idempotency.
+**Consequences:** If the model starts a *new* action for what is really the same intention, idempotency
+does not catch it; EHR domain constraints (one booking per slot, one open escalation per call) are the
+backstop, and eval trace checks surface it. Cross-call duplicates (F3) are handled by identity resolution
+and the EHR duplicate check.
 
 ## ADR-010 — Read-after-write verification + OutcomeLedger
 **Status:** Accepted

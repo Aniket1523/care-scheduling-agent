@@ -38,26 +38,38 @@ The core invariant: **the agent never tells a patient something happened unless 
 
 ## Stack
 
-- Python 3.14 in the existing `.venv` (Windows). Dependencies in `pyproject.toml`.
+- `requires-python >= 3.12`; developed on Python 3.14.10 in the existing `.venv` (Windows).
+- Dependencies in `pyproject.toml`.
 - Runtime: Pydantic; one LLM provider SDK (chosen at M3, ADR-006).
-- Dev: pytest, Ruff. No uv, no mypy, no ORM, no agent framework, no FastAPI.
+- Dev: pytest, Ruff. No uv, no mypy, no ORM, no agent framework, no FastAPI, no `.env` loader.
+- Configuration is read directly from environment variables (see `.env.example` for names).
 
-## Commands (Windows / PowerShell)
+## Commands (Windows CMD)
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"   # install
-.\.venv\Scripts\python.exe -m pytest                     # tests
-.\.venv\Scripts\python.exe -m ruff check .               # lint
-.\.venv\Scripts\python.exe -m ruff format --check .      # format check
-.\.venv\Scripts\python.exe -m care_agent chat --phone <caller-phone>   # agent (M3+)
-.\.venv\Scripts\python.exe -m care_agent eval            # eval loop (M4+)
+The developer uses **Windows CMD**. Documented commands must use CMD syntax
+(`set VAR=value`, backslash paths, `.venv\Scripts\activate.bat`).
+
+```bat
+.venv\Scripts\activate.bat
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+set LLM_PROVIDER=...
+set LLM_MODEL=...
+set LLM_API_KEY=...
+python -m care_agent chat --phone +15550100001
+python -m care_agent eval
 ```
+
+(`chat` works from M3, `eval` from M4; before that they exit with code 2.)
 
 ## Engineering conventions
 
 - Typed ID prefixes: `pat_ prv_ svc_ slot_ apt_ esc_ act_`; Pydantic rejects wrong prefixes.
 - `patient_id` comes from the verified session, never from the LLM.
-- Writes: tool layer mints `action_id` per logical operation; idempotency key reused across retries (ADR-009).
+- Writes: one `action_id` per logical operation, reused across retries, new one for a new intention.
+  The request fingerprint only rejects key reuse with different arguments — never classifies intent (ADR-009).
 - Every write is verified by read-back; outcomes go to the per-call `OutcomeLedger`.
 - Patient replies go through `reply_to_patient(message, confirmed_action_ids)`; the claim guard checks
   them against the ledger (ADR-011).

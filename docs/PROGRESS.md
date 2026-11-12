@@ -8,7 +8,7 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 | Phase | Estimate | Actual | Status | Notes |
 |---|---|---|---|---|
 | Analysis & design (pre-M0) | — | _TBD_ | Done | ANALYSIS.md, DECISIONS.md approved with modifications |
-| M0 Project skeleton | 0.5 h | | Not started | |
+| M0 Project skeleton | 0.5 h | | Awaiting review | 26 tests pass; Ruff clean; review fixes applied |
 | M1 Mock EHR | 1.5 h | | Not started | |
 | M2 Tool layer | 1.5 h | | Not started | |
 | M3 Agent + CLI + traces (tag `v0-baseline`) | 1.75 h | | Not started | ADR-006 provider decision needed first |
@@ -20,12 +20,15 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 ## Milestone checklist
 
 ### M0 — Project skeleton
-- [ ] `pyproject.toml` (package metadata, deps, Ruff + pytest config)
-- [ ] `src/care_agent/` package with `__main__`, CLI stub (`chat`, `eval`), env-based config
-- [ ] `.env.example`, `.gitignore` additions
-- [ ] Smoke + config tests passing; Ruff clean
-- [ ] `docs/AI_USAGE.md` started
-- [ ] Test results reported; commit
+- [x] `pyproject.toml` (package metadata, deps, Ruff + pytest config; `requires-python >= 3.12`)
+- [x] `src/care_agent/` package with `__main__`, CLI stub (`chat`, `eval`), env-based config
+- [x] `.env.example`, `.gitignore` additions
+- [x] Smoke + config tests passing (26/26); Ruff check + format clean
+- [x] Pre-commit review fixes: secret-safe errors (construction, assignment, no retained context),
+      single-source version, real-process CLI exit-code test, Ruff pinned to 0.17.4
+- [x] `docs/AI_USAGE.md` started
+- [x] Test results reported
+- [ ] Owner review; commit
 
 ### M1 — Mock EHR
 - [ ] Schema with constraints (partial unique indexes, CHECKs, FKs)

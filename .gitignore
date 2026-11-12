@@ -221,3 +221,14 @@ __marimo__/
 
 # Company-provided assignment document
 docs/*.pdf
+
+# Care Scheduling Agent
+# Any local env file variant (e.g. .env.local) may hold secrets; only the template is tracked.
+.env.*
+!.env.example
+# Eval run outputs and traces
+runs/
+# Local SQLite databases (tests/evals use a system temp dir; this guards against strays)
+*.sqlite
+*.sqlite3
+*.db
