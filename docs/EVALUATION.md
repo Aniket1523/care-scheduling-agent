@@ -139,4 +139,10 @@ Nothing modifies source code automatically. Tests and scenarios are never weaken
 - **Authorisation is graded, not enforced.** See `actions_authorised` above. Authorisations are
   hand-written per script and match exact IDs: if the agent offered a different slot and the caller
   accepted it, the check would still fail.
+- **Authorisations cannot see what the agent offered.** They are static per turn. E5 authorises a
+  new booking from turn 2 on the assumption that the agent offered only that booking. If the agent
+  offers several alternatives and the caller answers with a bare "Yes, go ahead.", nothing was
+  chosen, yet a booking made then would pass E5. Seen in run `20261113T062135Z` (the agent offered
+  a booking or a callback, then escalated; that escalation correctly failed). Recorded as a known
+  limitation; making authorisations offer-aware would need transcript analysis.
 - **Not covered:** speech recognition, latency, real EHR semantics, concurrent callers.

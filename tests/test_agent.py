@@ -918,6 +918,15 @@ def test_prompt_states_the_consent_policy_without_scenario_wording():
         '"already_requested"',
     ):
         assert rule in prompt, rule
+    flat = " ".join(prompt.split())  # rules may wrap across lines
+    # Run 20261113T062135Z, E5: "Yes, go ahead." after an either/or offer chose nothing.
+    assert "Prefer offering one alternative at a time" in flat
+    assert 'a bare "yes" or "go ahead" does not choose between them' in flat
+    # Same run, E6: a "yes" that repeats the original request is not acceptance of a callback.
+    assert 'even one that starts with "yes", does not accept a different offer' in flat
+    assert "does not accept an offered staff callback" in flat
+    assert "only when the caller explicitly asks for staff contact, or clearly accepts" in flat
+    assert "offer a staff callback (an offer, not an escalation)" in flat
     assert "Confirm with the caller before booking" not in prompt  # replaced by the policy
     for scenario in SCENARIOS:  # no caller line from the evaluation is quoted to the model
         for line in scenario.patient_turns:
