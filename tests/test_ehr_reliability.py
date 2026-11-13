@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from care_agent.ehr import repository as repo
 from care_agent.ehr import service
+from care_agent.ehr.db import connect, init_db
 from care_agent.ehr.faults import FaultMode, FaultPlan
 from care_agent.ehr.service import EHRError, EHRTimeout, ErrorCode
 from care_agent.ids import new_id
@@ -169,9 +172,11 @@ def test_cancel_timeout_after_commit_did_cancel(conn):
 
 def test_create_escalation(conn):
     maria = add_patient(conn)
-    escalation = service.create_escalation(
+    outcome = service.create_escalation(
         conn, CALL_ID, "wants a callback", action_id=new_id("act"), now=NOW, patient_id=maria.id
     )
+    assert outcome.created
+    escalation = outcome.escalation
     assert escalation.id.startswith("esc_")
     assert escalation.status == "open"
     assert escalation.patient_id == maria.id
@@ -198,9 +203,12 @@ def test_escalation_retry_after_post_commit_error_does_not_duplicate(conn):
 
 def test_new_escalation_action_for_same_call_returns_the_open_escalation(conn):
     first = escalate(conn, new_id("act"))
+    keys_before = count(conn, "idempotency_keys")
     second = escalate(conn, new_id("act"), reason="asked again")
-    assert second == first
+    assert second.escalation == first.escalation
+    assert first.created and not second.created
     assert count(conn, "escalations") == 1
+    assert count(conn, "idempotency_keys") == keys_before  # a repeat request writes nothing
 
 
 def test_different_calls_get_separate_escalations(conn):
@@ -268,3 +276,55 @@ def test_version_check_is_part_of_the_update(conn):
     with conn:
         assert not repo.mark_cancelled(conn, booked.id, booked.version, None, NOW)
     assert repo.get_appointment(conn, booked.id) == moved
+
+
+# --- IMP-004: escalation outcomes, replay order and the unique-index race ------------------
+
+
+def test_escalation_retry_after_error_after_commit_replays_original_creation(conn):
+    # The retry must replay "created", not see its own escalation as "already requested".
+    action_id = new_id("act")
+    faults = FaultPlan({"create_escalation": [FaultMode.ERROR_AFTER_COMMIT]})
+    with pytest.raises(EHRError):
+        escalate(conn, action_id, faults=faults)
+    retried = escalate(conn, action_id, faults=faults)
+    assert retried.created
+    assert count(conn, "escalations") == 1
+    assert count(conn, "idempotency_keys") == 1
+
+
+def test_concurrent_escalation_insert_resolves_to_already_requested(tmp_path, monkeypatch):
+    # Two connections to one database. B's open-escalation read is forced to miss A's commit
+    # (the race window), so only the unique index can stop a second open escalation.
+    path = tmp_path / "race.sqlite3"
+    a, b = connect(path), connect(path)
+    try:
+        init_db(a)
+        first = escalate(a, new_id("act"))
+        real_find = repo.find_open_escalation
+        reads = []
+
+        def find_open(c, call_id):  # the first read misses A's commit; later reads are real
+            reads.append(call_id)
+            return None if len(reads) == 1 else real_find(c, call_id)
+
+        monkeypatch.setattr(repo, "find_open_escalation", find_open)
+        second = escalate(b, new_id("act"), reason="same callback, other line")
+        assert len(reads) == 2  # the pre-insert check, then the read after the violation
+        assert not second.created
+        assert second.escalation.id == first.escalation.id
+        assert count(a, "escalations") == 1
+        assert count(a, "idempotency_keys") == 1  # the loser wrote nothing
+    finally:
+        a.close()
+        b.close()
+
+
+def test_unrelated_integrity_error_is_not_swallowed(conn, monkeypatch):
+    def broken_insert(c, escalation):
+        raise sqlite3.IntegrityError("FOREIGN KEY constraint failed")
+
+    monkeypatch.setattr(repo, "insert_escalation", broken_insert)
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        escalate(conn, new_id("act"))
+    assert count(conn, "escalations") == 0

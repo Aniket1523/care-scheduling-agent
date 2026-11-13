@@ -847,3 +847,78 @@ def test_truthful_restatement_after_own_cancellation_is_not_rejected(ehr):
     agent.respond("Maria Garcia 1985-03-14. Please cancel my check-up.")
     assert agent.respond("Yes, please cancel it.") == restated
     model.assert_finished()
+
+
+# --- IMP-004: escalation reporting through the tool -----------------------------------------
+
+
+def escalation_runner(conn, faults=None):
+    state = ConversationState(call_id="call_test", caller_phone=LUIS_PHONE)
+    return ToolRunner(conn, state, lambda: NOW, faults), state
+
+
+def test_repeat_escalation_request_reports_already_requested_without_an_action(ehr):
+    runner, state = escalation_runner(ehr)
+    first = runner.execute("escalate_to_staff", {"reason": "billing question"})
+    second = runner.execute("escalate_to_staff", {"reason": "urgent, please call today"})
+
+    assert first["verified"] is True and first["data"]["escalation"] == "created"
+    escalation_id = first["data"]["escalation_id"]
+    assert second == {
+        "status": "ok",
+        "data": {"escalation": "already_requested", "escalation_id": escalation_id},
+        "guidance": second["guidance"],
+    }
+    assert "action_id" not in second and "verified" not in second
+    verified = [e for e in state.ledger.entries.values() if e.status == "verified"]
+    assert [(e.operation, e.record_id) for e in verified] == [("create_escalation", escalation_id)]
+    assert ehr.execute("SELECT count(*) FROM escalations").fetchone()[0] == 1
+    assert ehr.execute("SELECT count(*) FROM idempotency_keys").fetchone()[0] == 1
+
+
+def test_escalation_retry_after_error_after_commit_is_reported_as_created(ehr):
+    faults = FaultPlan({"create_escalation": [FaultMode.ERROR_AFTER_COMMIT]})
+    runner, state = escalation_runner(ehr, faults)
+    result = runner.execute("escalate_to_staff", {"reason": "billing question"})
+    assert result["verified"] is True
+    assert result["data"]["escalation"] == "created"
+    assert state.ledger.get(result["action_id"]).record_id == result["data"]["escalation_id"]
+
+
+def test_escalation_reconciled_after_every_attempt_times_out_after_commit(ehr):
+    faults = FaultPlan({"create_escalation": [FaultMode.TIMEOUT_AFTER_COMMIT] * 3})
+    runner, _ = escalation_runner(ehr, faults)
+    result = runner.execute("escalate_to_staff", {"reason": "billing question"})
+    assert result["verified"] is True and result["data"]["escalation"] == "created"
+
+
+def test_repeat_request_reconciled_as_already_requested_when_attempts_time_out(ehr):
+    runner, state = escalation_runner(ehr)
+    runner.execute("escalate_to_staff", {"reason": "billing question"})
+    runner.faults = FaultPlan({"create_escalation": [FaultMode.TIMEOUT_BEFORE_COMMIT] * 3})
+    second = runner.execute("escalate_to_staff", {"reason": "asked again"})
+    assert second["data"]["escalation"] == "already_requested"
+    assert "action_id" not in second
+    assert len(state.ledger.verified()) == 1
+
+
+# --- IMP-003: consent rules in the prompt ---------------------------------------------------
+
+
+def test_prompt_states_the_consent_policy_without_scenario_wording():
+    from care_agent.agent.prompt import build_system_prompt
+    from care_agent.evals.scenarios import SCENARIOS
+
+    prompt = build_system_prompt(NOW.date())
+    for rule in (
+        "authorises exactly that action",
+        "does not let you\n  choose for them",
+        "is not authorised until the caller clearly accepts that offer",
+        "ask again before acting",
+        '"already_requested"',
+    ):
+        assert rule in prompt, rule
+    assert "Confirm with the caller before booking" not in prompt  # replaced by the policy
+    for scenario in SCENARIOS:  # no caller line from the evaluation is quoted to the model
+        for line in scenario.patient_turns:
+            assert line not in prompt

@@ -173,11 +173,19 @@ TOOL_DECLARATIONS: list[dict[str, Any]] = [
 # successful lookup is not mistaken for an unverified one.
 
 
-def ok(data: Any = None, *, action_id: str | None = None, verified: bool = False) -> dict:
+def ok(
+    data: Any = None,
+    *,
+    action_id: str | None = None,
+    verified: bool = False,
+    guidance: str = "",
+) -> dict:
     result: dict[str, Any] = {"status": "ok", "data": data}
     if action_id is not None:
         result["action_id"] = action_id
         result["verified"] = verified
+    if guidance:
+        result["guidance"] = guidance
     return result
 
 
@@ -479,12 +487,21 @@ class ToolRunner:
         )
 
     def escalate_to_staff(self, reason: str) -> dict:
+        """Ask staff to call back (IMP-004).
+
+        Reports ``created`` (a new, verified escalation: a ledger action) or
+        ``already_requested`` (this call's escalation was already open: nothing
+        was written, so there is no action_id and nothing new to confirm).
+        """
         action_id = self._new_action()
         patient = self.state.verified_patient
+        # Read only to interpret a reconciliation below, never to decide whether to write.
+        open_before = repo.find_open_escalation(self.conn, self.state.call_id)
+        outcome: service.EscalationOutcome | None = None
         error: EHRError | None = None
         for attempt_no in range(1, MAX_WRITE_ATTEMPTS + 1):
             try:
-                service.create_escalation(
+                outcome = service.create_escalation(
                     self.conn,
                     self.state.call_id,
                     reason,
@@ -520,9 +537,26 @@ class ToolRunner:
                 action_id=action_id,
                 guidance=_TELL_THE_TRUTH,
             )
+        if outcome is not None:
+            created = outcome.created
+        else:  # no attempt answered: the escalation is ours only if it was not open before
+            created = open_before is None or open_before.id != escalation.id
+        if not created:
+            return ok(
+                {"escalation": "already_requested", "escalation_id": escalation.id},
+                guidance=(
+                    "This call's callback request was already open; nothing new was recorded. "
+                    "Tell the caller their request is already with the team. Do not say you "
+                    "sent a new or urgent note."
+                ),
+            )
         summary = "A member of staff has been asked to call you back."
-        self._record(action_id, "create_escalation", "verified", summary)
-        return ok({"escalation": "open"}, action_id=action_id, verified=True)
+        self._record(action_id, "create_escalation", "verified", summary, record_id=escalation.id)
+        return ok(
+            {"escalation": "created", "escalation_id": escalation.id},
+            action_id=action_id,
+            verified=True,
+        )
 
     # --- Helpers -------------------------------------------------------------------
 

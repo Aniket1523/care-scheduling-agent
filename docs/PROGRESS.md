@@ -108,14 +108,16 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
       evidence must point to one record; grader `claims_match_ehr` split the same way; prompt asks
       to re-list action IDs and never claim a cancellation the agent did not make. 13 new tests;
       5 of the new guard tests fail on the committed guard (checked)
-- [ ] M4.4c IMP-003 consent policy in the prompt; IMP-004 escalation reporting. Race findings to
-      address (from the M4.4 review probe): the unique index `ux_one_open_escalation_per_call`
-      already makes one-open-escalation-per-call atomic (a forced race left 1 row and rolled the
-      loser back), but the loser surfaces as a raw `sqlite3.IntegrityError` that
-      `ToolRunner.escalate_to_staff` does not catch, so the agent turn would crash. Fix in
-      `service.create_escalation`: keep the order (replay action_id, then open-escalation read,
-      then insert); map only that unique-index violation to "already requested"; let any other
-      SQLite error propagate
+- [x] M4.4c IMP-003 (`improvements/IMP-003.md`): prompt Consent section per ADR-020 (explicit
+      requests authorise; offers need clear acceptance; ambiguous answers are clarified; no
+      scenario wording quoted)
+- [x] M4.4c IMP-004 (`improvements/IMP-004.md`): `create_escalation` returns created /
+      already-requested (replay first, then open check, then insert; only the
+      one-open-escalation unique-index violation maps to already-requested); the tool reports
+      `already_requested` with no action; ledger `record_id` for escalations; generic
+      `ledger_matches_ehr` check; scripted E2 passes (strict xfail removed). 228 tests pass
+- [ ] Owner: real-Gemini after-run with `--record-evidence --update-baseline`; fill in the IMP-003 and
+      IMP-004 result tables and `evals/evidence/README.md`
 
 ### M4 — Evaluation harness (original plan, superseded by M3 above)
 - [ ] Scenario JSON schema; 8–10 scenarios

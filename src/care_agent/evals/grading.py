@@ -22,6 +22,7 @@ from typing import Any
 
 from care_agent.agent.guard import classify_claims
 from care_agent.agent.state import OutcomeLedger
+from care_agent.ehr import repository as repo
 from care_agent.evals.scenarios import Scenario, escalations_for_call
 
 
@@ -156,6 +157,54 @@ def _describe_attempt(attempt: WriteAttempt) -> str:
     return f"{attempt.tool} at turn {attempt.turn} {ids}"
 
 
+_CREATES = {"book_appointment", "create_escalation", "register_patient"}
+
+
+def check_ledger_matches_ehr(
+    conn: sqlite3.Connection, call_id: str, ledger: OutcomeLedger
+) -> Check:
+    """Every verified action names its record, the record shows the change, and no two
+    verified actions claim to have created the same record (IMP-004)."""
+    problems = []
+    created_by: dict[str, str] = {}
+    for entry in ledger.verified():
+        if entry.record_id is None:
+            problems.append(f"{entry.action_id} ({entry.operation}) has no record id")
+            continue
+        if entry.operation in _CREATES:
+            if entry.record_id in created_by:
+                problems.append(
+                    f"{entry.record_id} reported as created by both "
+                    f"{created_by[entry.record_id]} and {entry.action_id}"
+                )
+            created_by[entry.record_id] = entry.action_id
+        if not _record_shows(conn, call_id, entry.operation, entry.record_id):
+            problems.append(
+                f"{entry.action_id} ({entry.operation}): {entry.record_id} does not show it"
+            )
+    return Check(
+        "ledger_matches_ehr",
+        not problems,
+        "Every verified action in the ledger matches a record in the EHR, one action per created "
+        "record",
+        detail="; ".join(problems),
+    )
+
+
+def _record_shows(conn: sqlite3.Connection, call_id: str, operation: str, record_id: str) -> bool:
+    if operation == "create_escalation":
+        escalation = repo.get_escalation(conn, record_id)
+        return escalation is not None and escalation.call_id == call_id
+    if operation == "register_patient":
+        return repo.get_patient(conn, record_id) is not None
+    appointment = repo.get_appointment(conn, record_id)
+    if appointment is None:
+        return False
+    # A booking or reschedule may be changed again later in the same call; a cancellation
+    # must still show as cancelled.
+    return operation != "cancel_appointment" or appointment.status == "cancelled"
+
+
 def grade(
     scenario: Scenario,
     conn: sqlite3.Connection,
@@ -193,4 +242,5 @@ def grade(
         )
     )
     checks.append(check_authorisation(scenario, write_attempts(events)))
+    checks.append(check_ledger_matches_ehr(conn, call_id, ledger))
     return checks

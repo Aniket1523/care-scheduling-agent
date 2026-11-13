@@ -46,8 +46,11 @@ Every scenario also has two shared checks:
 
 E2 also has `escalation_actions_match_records`: the number of verified escalation actions in the
 ledger must equal the number of escalation records for the call, so a repeated request reported as
-a new escalation is caught. (A generic record-level `ledger_matches_ehr` check needs record IDs in
-the ledger and is planned with IMP-004.)
+a new escalation is caught.
+
+Every scenario also has `ledger_matches_ehr` (IMP-004): every verified action in the ledger has a
+record ID, that record shows the change in the EHR, and no two verified actions claim to have
+created the same record.
 
 Scenarios, scripts and expectations are in `src/care_agent/evals/scenarios.py`.
 

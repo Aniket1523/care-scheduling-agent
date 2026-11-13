@@ -17,6 +17,7 @@ from care_agent.ehr import service
 from care_agent.evals.grading import (
     WriteAttempt,
     check_authorisation,
+    check_ledger_matches_ehr,
     claimed_by_agent,
     write_attempts,
 )
@@ -93,24 +94,7 @@ def good_agent(scenario_id: str) -> ScriptedModel:
     return ScriptedModel(steps)
 
 
-def _expected_outcome(scenario):
-    if scenario.id == "E2":
-        # Known pre-fix defect, not a script problem: the caller's repeat request makes the
-        # escalation tool write again (new action_id, verified: true) for the same open
-        # escalation. IMP-004 fixes the tool; strict=True makes this fail once it passes,
-        # so the marker must then be removed.
-        return pytest.param(
-            scenario,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="IMP-004: repeat escalation request is still reported as a new write",
-            ),
-            id=scenario.id,
-        )
-    return pytest.param(scenario, id=scenario.id)
-
-
-@pytest.mark.parametrize("scenario", [_expected_outcome(s) for s in SCENARIOS])
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.id)
 def test_every_scenario_passes_with_a_well_behaved_agent(scenario):
     model = good_agent(scenario.id)
     result = run_scenario(scenario, model)
@@ -504,13 +488,27 @@ def test_guard_rejections_are_counted_and_reported(tmp_path):
     assert "Claim-guard rejections: 1 (reported, not graded)" in output
 
 
+def e2_with_an_unrequested_booking(scenario):
+    # Escalates as asked (reason text in the trace), then books something nobody asked for.
+    return ScriptedModel(
+        [
+            call("verify_identity", **LUIS),
+            call("escalate_to_staff", reason="billing question"),
+            call("book_appointment", service_id="svc_cleaning", slot_id=FRI_0900_LEE),
+            reply_confirming_last("Staff will call you, and I booked you a cleaning."),
+            reply("Yes, someone will call you back."),
+            reply("Goodbye."),
+        ]
+    )
+
+
 def test_evidence_is_recorded_on_regression_and_is_sanitised(tmp_path):
     baseline = tmp_path / "baseline.json"
     baseline.write_text(json.dumps({"E2": "pass"}))
     evidence_dir = tmp_path / "evidence"
     code = run_eval(
         ["E2"],
-        client_factory=good_agent_for,  # E2 still writes twice before IMP-004
+        client_factory=e2_with_an_unrequested_booking,
         baseline_path=baseline,
         runs_dir=tmp_path / "runs",
         record_evidence=True,
@@ -527,19 +525,17 @@ def test_evidence_is_recorded_on_regression_and_is_sanitised(tmp_path):
     assert evidence["baseline_score"] == {"passed": 1, "total": 1}
     (e2,) = evidence["scenarios"]
     assert e2["status"] == "fail"
-    assert {f["name"] for f in e2["failed_checks"]} == {
-        "actions_authorised",
-        "escalation_actions_match_records",
-    }
+    assert {f["name"] for f in e2["failed_checks"]} == {"actions_authorised"}
     assert e2["write_attempts"] == [
         {"turn": 0, "tool": "escalate_to_staff"},
-        {"turn": 1, "tool": "escalate_to_staff"},
+        {"turn": 0, "tool": "book_appointment"},
     ]
     assert e2["faults_injected"] == [
         {"operation": "create_escalation", "mode": "error_after_commit"}
     ]
     raw = path.read_text()
-    for private in ("Luis", "billing question", "caller asked again", "bill", "1983-07-02"):
+    # Record IDs (e.g. svc_cleaning) are allowed; names, dates and free text are not.
+    for private in ("Luis", "Maria", "billing question", "bill", "1983-07-02", "I booked you"):
         assert private not in raw
     assert json.loads(baseline.read_text()) == {"E2": "pass"}  # baseline untouched
 
@@ -592,3 +588,44 @@ def test_grader_accepts_state_claim_for_an_external_change(monkeypatch):
         "Your check-up has already been cancelled. Shall I book a new one?", monkeypatch
     )
     assert result.status == "pass", [(c.name, c.detail) for c in result.failed_checks]
+
+
+# --- IMP-004: ledger_matches_ehr --------------------------------------------------------
+
+
+def test_ledger_matches_ehr_accepts_one_action_per_record(conn):
+    outcome = service.create_escalation(
+        conn, "call_e2", "billing", action_id=new_id("act"), now=NOW
+    )
+    ledger = OutcomeLedger()
+    ledger.record(
+        LedgerEntry("act_1", "create_escalation", "verified", "callback", outcome.escalation.id)
+    )
+    assert check_ledger_matches_ehr(conn, "call_e2", ledger).passed
+
+
+def test_ledger_matches_ehr_rejects_two_actions_for_one_created_record(conn):
+    # The pre-IMP-004 E2 ledger: two verified escalation actions, one escalation.
+    outcome = service.create_escalation(
+        conn, "call_e2", "billing", action_id=new_id("act"), now=NOW
+    )
+    ledger = OutcomeLedger()
+    for action_id in ("act_1", "act_2"):
+        ledger.record(
+            LedgerEntry(
+                action_id, "create_escalation", "verified", "callback", outcome.escalation.id
+            )
+        )
+    check = check_ledger_matches_ehr(conn, "call_e2", ledger)
+    assert not check.passed
+    assert "created by both act_1 and act_2" in check.detail
+
+
+def test_ledger_matches_ehr_rejects_missing_ids_and_unconfirmed_records(conn):
+    ledger = OutcomeLedger()
+    ledger.record(LedgerEntry("act_1", "create_escalation", "verified", "callback"))  # no id
+    ledger.record(LedgerEntry("act_2", "cancel_appointment", "verified", "x", "apt_nothere"))
+    check = check_ledger_matches_ehr(conn, "call_e2", ledger)
+    assert not check.passed
+    assert "act_1 (create_escalation) has no record id" in check.detail
+    assert "act_2 (cancel_appointment): apt_nothere does not show it" in check.detail

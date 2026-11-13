@@ -437,12 +437,21 @@ def create_escalation(
     now: datetime,
     patient_id: str | None = None,
     faults: FaultPlan | None = None,
-) -> Escalation:
-    """Ask clinic staff to follow up on this call.
+) -> EscalationOutcome:
+    """Ask clinic staff to follow up on this call (IMP-004).
 
-    Idempotent per ``action_id``. A call has at most one open escalation: a new
-    action for a call that already has one returns that escalation rather than
-    opening a second (F2).
+    In order:
+
+    1. Replay: if this ``action_id`` already created an escalation, return it
+       (``created=True``). A retry after a timeout or error after commit lands
+       here, so the caller's first request is never reported as a repeat.
+    2. A new action for a call that already has an open escalation writes
+       nothing (no escalation, no idempotency record) and returns the existing
+       one with ``created=False``.
+    3. Otherwise insert. The partial unique index allows one open escalation per
+       call; if a concurrent request won the race, the insert violates it and the
+       winner is returned with ``created=False``. Any other database error
+       propagates.
     """
     action_id = check_id("action_id", action_id)
     if patient_id is not None:
@@ -452,35 +461,51 @@ def create_escalation(
         {"call_id": call_id.strip(), "patient_id": patient_id, "reason": reason.strip()}
     )
 
-    def body() -> Escalation:
+    def body() -> EscalationOutcome:
         previous = _previous_result(conn, action_id, operation, request_hash)
         if previous is not None:
-            return _read_back_escalation(conn, previous)
+            return EscalationOutcome(_read_back_escalation(conn, previous), created=True)
 
         if patient_id is not None and repo.get_patient(conn, patient_id) is None:
             raise EHRError(ErrorCode.NOT_FOUND, f"patient {patient_id} not found")
-        escalation = repo.find_open_escalation(conn, call_id.strip())
-        if escalation is None:
-            try:
-                escalation = Escalation(
-                    id=new_id("esc"),
-                    call_id=call_id,
-                    patient_id=patient_id,
-                    reason=reason,
-                    created_at=now,
-                )
-            except ValidationError as exc:
-                fields = ", ".join(str(err["loc"][0]) for err in exc.errors())
-                raise EHRError(
-                    ErrorCode.INVALID_ARGUMENT, f"invalid escalation fields: {fields}"
-                ) from None
+        existing = repo.find_open_escalation(conn, call_id.strip())
+        if existing is not None:
+            return EscalationOutcome(existing, created=False)
+
+        try:
+            escalation = Escalation(
+                id=new_id("esc"),
+                call_id=call_id,
+                patient_id=patient_id,
+                reason=reason,
+                created_at=now,
+            )
+        except ValidationError as exc:
+            fields = ", ".join(str(err["loc"][0]) for err in exc.errors())
+            raise EHRError(
+                ErrorCode.INVALID_ARGUMENT, f"invalid escalation fields: {fields}"
+            ) from None
+        try:
             repo.insert_escalation(conn, escalation)
+        except sqlite3.IntegrityError as exc:
+            if "escalations.call_id" not in str(exc):
+                raise  # not the one-open-escalation-per-call rule
+            winner = repo.find_open_escalation(conn, call_id.strip())
+            if winner is None:
+                raise
+            return EscalationOutcome(winner, created=False)
         repo.insert_idempotency_record(
             conn, IdempotencyRecord(action_id, operation, request_hash, escalation.id), now
         )
-        return _read_back_escalation(conn, escalation.id)
+        return EscalationOutcome(_read_back_escalation(conn, escalation.id), created=True)
 
     return _run_write(conn, operation, faults, body)
+
+
+@dataclass(frozen=True)
+class EscalationOutcome:
+    escalation: Escalation
+    created: bool  # False: an open escalation for this call already existed
 
 
 def _read_back_escalation(conn: sqlite3.Connection, escalation_id: str) -> Escalation:

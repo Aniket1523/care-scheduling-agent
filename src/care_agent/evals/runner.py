@@ -216,6 +216,11 @@ _CHECK_HINTS = {
         "prompt (consent policy, ADR-020)",
         "The agent attempted a write the caller had not authorised.",
     ),
+    "ledger_matches_ehr": (
+        "misreported_write",
+        "tool result / ledger (record ids)",
+        "A verified action does not match the EHR, or two actions claim one record.",
+    ),
     "escalation_actions_match_records": (
         "misreported_write",
         "escalation tool result / ledger",
