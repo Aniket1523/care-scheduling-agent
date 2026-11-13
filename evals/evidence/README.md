@@ -44,3 +44,22 @@ Not recorded as evidence files; listed for context only.
   new appointment before the caller accepted it; E6 as above).
 
 The offline regrades were review analysis with a scratch script, not recorded runs.
+
+## Before/fix commit pairs (checked 2026-11-13)
+
+For each improvement: the last commit before the fix, the fix commit, and whether a demonstration
+can honestly show "fails before, passes after". "Eval works" means `python -m care_agent eval`
+runs at that commit (checked in a separate worktree, importing that worktree's code: without a key
+it reaches the configuration check and exits 2, as on `main`). "Scripted" means the scenario was
+run through `run_eval` at that commit with the deterministic scripted agent from that commit's
+`tests/test_evals.py` (no network).
+
+| IMP | Scenario | Last commit before fix | Fix commit | Scenario existed before? | Eval works before? | Honest before/after demo? |
+|---|---|---|---|---|---|---|
+| IMP-001 | E3 | none: `0b9276c` has no agent | `7582822` (first agent commit) | No (harness from `2143a0b`) | No | **No.** The defect was never committed together with the harness; the "before" is a manual session. Do not demonstrate live. |
+| IMP-002 | E4, E5 (claim-guard rejections) | `436dc22` | `715b239` | Yes | Yes | **No, misleading.** The effect is fewer guard rejections, not a pass/fail change: scripted E4, E5, E6 pass at both commits (checked), and real E4/E5 did not fail because of it. |
+| IMP-003 | E6 (step 3) | `228481a` | `113367f` | Yes | Yes | **Live only, not guaranteed.** A prompt and tool-guidance fix: the scripted agent never escalates, so it passes at both. Recorded real runs: E6 failed at `228481a` (`063300Z`, one run) and passed at `113367f` (`063830Z`, `064320Z`). Gemini is not deterministic, so a live re-run may not reproduce either result. |
+| IMP-004 | E2 | `715b239` | `c7c7352` | Yes | Yes | **Yes, the best pair.** Scripted E2 at `715b239`: fails `escalation_actions_match_records` and `actions_authorised`, exit 1, `REGRESSION: E2`. At `c7c7352`: passes, exit 0 (both checked). A live Gemini run fails only if the model escalates again on the repeated request, as it did in both real runs that reached that turn (`053628Z`, recorded; `181154Z`, offline regrade). Caveat: `c7c7352` also contains IMP-003 step 1 (prompt). |
+
+Run `053628Z` (the "before" run) was made on the working tree just before commit `436dc22`, so it
+cannot be tied to an exact commit.
