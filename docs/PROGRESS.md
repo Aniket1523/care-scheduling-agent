@@ -9,10 +9,10 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 |---|---|---|---|---|
 | Analysis & design (pre-M0) | — | _TBD_ | Done | ANALYSIS.md, DECISIONS.md approved with modifications |
 | M0 Project skeleton | 0.5 h | | Done | Committed `50fc0b3` |
-| M1 Mock EHR | 1.5 h | | In progress | M1a `8da4eb8`, M1b `291edfa` committed; M1c (reliability) awaiting review: 113 tests pass; Ruff clean |
-| M2 Agent: tools + loop + Gemini + CLI (planned M2 + M3) | 3.25 h | | Awaiting review | 150 tests pass; Ruff clean; needs a real Gemini run |
-| M4 Eval harness | 1.75 h | | Not started | |
-| M5 Improvement loop (tag `v1`) | 1 h | | Not started | |
+| M1 Mock EHR | 1.5 h | | Done | M1a `8da4eb8`, M1b `291edfa`, M1c `0b9276c` |
+| M2 Agent: tools + loop + Gemini + CLI (planned M2 + M3) | 3.25 h | | Done | `7582822` (includes the IMP-001 fix) |
+| M3 Eval harness + real Gemini baseline (planned M4) | 1.75 h | | Done | `2143a0b`; baseline 6/6 |
+| M4 Improvement loop: IMP-001, manual test, verification (planned M5) | 1 h | | M4.3 awaiting review | IMP-001 `9cf313b`; 189 tests pass; Ruff clean |
 | M6 Documentation & submission | 0.75 h | | Not started | |
 | **Total** | **8.75 h** | | | |
 
@@ -75,9 +75,24 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [x] `python -m care_agent eval`; docs/EVALUATION.md; improvements/TEMPLATE.md
 - [x] 16 network-free harness tests (every scenario passes with a well-behaved scripted agent;
       failures, regressions, model errors, traces)
-- [ ] Honest baseline with real Gemini (owner: needs LLM_API_KEY)
-- [ ] IMP records for genuine failures, reviewed fixes, before/after scores
+- [x] Honest baseline with real Gemini: 6/6 (run `20261112T160955Z`, `evals/baseline.json`),
+      recorded after the IMP-001 fix
+- [x] IMP records for genuine failures: IMP-001 (see M4 below)
 
+### M4 — Improvement loop (owner numbering)
+- [x] M4.1 IMP-001: identity result carried `verified: false`; Gemini told a verified caller no
+      record existed. Before = manual real-Gemini session; after = real-Gemini retest, E3 run
+      `20261112T155834Z`, 6/6 baseline. No measured 0/6 -> 6/6 is claimed (baseline came after)
+- [x] M4.2 Manual real-Gemini reschedule test recorded: `manual-tests/2026-11-12-reschedule.md`
+      (Maria, `apt_mariacheckup` -> Tue 17 Nov 09:00 Dr Lee, `verified: true`, guard accepted)
+- [x] M4.3 IMP-001 reviewed against code (one inaccuracy fixed: `not_checked` is not set via
+      `_identity_failed()`; non-ASCII arrows replaced for cp1252 viewers)
+- [x] M4.3 Focused IMP-001 tests: 7 passed; full suite: 189 passed; Ruff lint/format clean
+- [x] M4.3 Regression gate: controlled run on a temp copy of the committed baseline with E1
+      deliberately failing -> exit 1, REGRESSION: E1, baseline update refused, committed
+      baseline unchanged
+- [ ] M4.3 Real-Gemini eval re-run against the baseline: not run (LLM_API_KEY not available to
+      the tooling; `eval` exited 2 as designed). Owner to run before submission
 ### M4 — Evaluation harness (original plan, superseded by M3 above)
 - [ ] Scenario JSON schema; 8–10 scenarios
 - [ ] Scripted patient simulator
