@@ -149,6 +149,12 @@ overnight break, so it does not establish time spent.
       transcript" and "Known limits"); no separate RUBRIC.md
 - [x] `docs/AI_USAGE.md` complete
 - [x] Final checks: 230 tests pass; Ruff check and format clean; no secrets or `.env` tracked
+- [x] M6 final tasks: E6 `checkup_unchanged` proven able to fail (`3d05253`); rate-limit pacing
+      and backoff, persistent 429 graded `error` (`8692e8f`); `--rebuild-baseline` from one complete
+      run, original baseline copied to `evals/baseline-history/` (`464a98d`); verified before/fix
+      commit pairs in `evals/evidence/README.md` (`3413af8`); reviewer-facing cleanup, internal docs
+      moved to `docs/internal/` (`c0f6a89`). 244 tests pass; Ruff clean. The baseline itself is
+      unchanged; the rebuild command is for the owner to run.
 - [ ] Optional: one more full real-Gemini run for a single 6/6 record. Not attempted during
       finalisation: no `LLM_API_KEY` was available in that environment. The split-run disclosure
       stands.
