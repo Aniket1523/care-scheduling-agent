@@ -174,7 +174,7 @@ preferred, which can separate duplicate records. A phone-only match never verifi
 the three details is missing, `resolve_identity` returns `verification_required` without revealing
 anything about the phone's holders. If the phone belongs to another patient (F3, spouse's phone), the
 name + DOB match decides. Ambiguous matches stay ambiguous. Lookup never creates a patient.
-**Supersedes:** "Identify the caller by caller-ID phone; fall back to name + DOB" in `ANALYSIS.md`
+**Supersedes:** "Identify the caller by caller-ID phone; fall back to name + DOB" in `docs/internal/ANALYSIS.md`
 (§4, §10) and the phone-only `lookup_caller` tool in §7.2, which is revisited in M2.
 **Why:** Caller ID can belong to someone else (F3) and can be spoofed; acting on the wrong patient's
 record is worse than asking two questions.

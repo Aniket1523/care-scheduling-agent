@@ -64,7 +64,7 @@ answer to the written incident question, time spent, and notes on AI usage. Budg
 | R16 | README: one command to run the agent, one to run the eval loop | `python -m care_agent chat …`, `python -m care_agent eval` |
 | R17 | Screen recording of conversation + loop | Repo supports it via `v0-baseline` / `v1` tags |
 | R18 | Design note ≤1 page incl. before/after scores, one real-clinic change | `docs/DESIGN.md` |
-| R19 | Time spent | `docs/PROGRESS.md` |
+| R19 | Time spent | `docs/internal/PROGRESS.md` |
 | R20 | Where AI helped / where judgment overrode it | `docs/AI_USAGE.md`, maintained from M0 |
 | R21 | Able to explain every line | Few dependencies, no frameworks |
 

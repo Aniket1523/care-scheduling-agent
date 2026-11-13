@@ -10,7 +10,7 @@ lead reviews and approves every milestone.
 
 | Date | Milestone | What AI did |
 |---|---|---|
-| 2026-11-12 | Design | Read the assignment; produced requirements breakdown, traceability matrix, domain model, schema, tool contracts, evaluation and improvement-loop design, risks and milestone plan (`docs/design/ANALYSIS.md`). |
+| 2026-11-12 | Design | Read the assignment; produced requirements breakdown, traceability matrix, domain model, schema, tool contracts, evaluation and improvement-loop design, risks and milestone plan (`docs/internal/ANALYSIS.md`). |
 | 2026-11-12 | Design | Drafted decision records (`docs/design/DECISIONS.md`), progress tracker and `CLAUDE.md`. |
 | 2026-11-12 | M0 | Wrote the project skeleton: `pyproject.toml`, env-based config module, CLI placeholders, pytest tests, Ruff config. |
 | 2026-11-12 | M1a | Wrote typed IDs, Patient/Appointment models, SQLite schema and repository, and 24 tests. Self-review caught two test problems before reporting: an import that only worked under `python -m pytest`, and a "rollback" test that could not fail; the latter was rewritten and checked with a deliberate autocommit mutation. |

@@ -9,6 +9,27 @@ regression gate.
 > final verification was split across three runs because of free-tier rate limits; see
 > [docs/DESIGN.md](docs/DESIGN.md) and [evals/evidence/README.md](evals/evidence/README.md).
 
+## What needs a Gemini API key
+
+**Live agent conversations (`chat`) and live evaluation runs (`eval`) need a Gemini API key**
+(`LLM_API_KEY`). Without it, both commands stop with a configuration error (exit 1 and 2).
+
+Without a key you can still:
+
+- run the full test suite (`python -m pytest`): a scripted model drives the real agent, tools, EHR,
+  fault injection, grading and regression gate, with no network;
+- read the recorded results: `evals/evidence/*.json` (one sanitised summary per real run) and the
+  index in [evals/evidence/README.md](evals/evidence/README.md);
+- read the improvement records in [improvements/](improvements/).
+
+Re-grading saved traces is **not** supported as a command: full traces are written to the
+git-ignored `runs/` folder and stay on the machine that ran them. The earlier offline regrades
+mentioned in the docs were one-off review scripts, not part of the tool.
+
+Reviewer quick start: [design note](docs/DESIGN.md), [incident answer](docs/INCIDENT.md),
+[evaluation](docs/EVALUATION.md), [evidence](evals/evidence/README.md),
+[improvements](improvements/), [AI usage](docs/AI_USAGE.md).
+
 ## Requirements
 
 - Python 3.12 or newer (developed on 3.14.10)
@@ -68,6 +89,12 @@ such as a free-tier 429 that persists after the built-in backoff). A full run ma
 model calls, spaced at least 4 seconds apart, so it takes a few minutes. If the quota is still hit,
 re-run single scenarios with `python -m care_agent eval --scenario E3`.
 
+Full evaluation (all six scenarios, regression gate, plus a committed evidence summary):
+
+```bat
+python -m care_agent eval --record-evidence
+```
+
 To rebuild the regression baseline from one complete run under the current checks:
 
 ```bat
@@ -93,8 +120,10 @@ python -m ruff format --check .
 - [Incident answer](docs/INCIDENT.md) (the written question)
 - [Evaluation and improvement loop](docs/EVALUATION.md); [recorded evidence](evals/evidence/README.md);
   [improvement records](improvements/)
-- [Requirements analysis and plan](docs/design/ANALYSIS.md) (pre-build; DECISIONS.md and the docs above describe what was built)
-- [Architectural decisions](docs/design/DECISIONS.md)
-- [Progress and time tracking](docs/PROGRESS.md) (time spent)
-- [Manual real-model test](manual-tests/2026-11-12-reschedule.md)
 - [AI usage log](docs/AI_USAGE.md)
+- [Architectural decisions](docs/design/DECISIONS.md)
+- [Manual real-model test](manual-tests/2026-11-12-reschedule.md)
+
+Internal working files (kept for transparency, not needed to review the submission):
+[pre-build analysis and plan](docs/internal/ANALYSIS.md),
+[progress log and time spent](docs/internal/PROGRESS.md).
