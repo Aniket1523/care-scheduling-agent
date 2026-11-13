@@ -554,3 +554,41 @@ def test_no_evidence_without_the_flag(tmp_path):
         write=lambda line: None,
     )
     assert not (tmp_path / "evidence").exists()
+
+
+# --- IMP-002: grader separates the agent's actions from observed state -------------------
+
+
+def e5_reply_after_external_cancel(message, monkeypatch):
+    # The claim guard is switched off so the grader is tested on its own.
+    import care_agent.agent.loop as loop
+    from care_agent.agent.guard import GuardDecision
+
+    monkeypatch.setattr(
+        loop, "check_reply", lambda text, ids, ledger: GuardDecision(ok=True, text=text)
+    )
+    return run_e5(
+        [
+            call("verify_identity", **MARIA),
+            call("list_my_appointments"),
+            reply("You have a check-up on Monday 16 November at 10:00."),
+            call("list_my_appointments"),
+            reply(message),
+            reply("Okay."),
+            reply("Goodbye."),
+        ]
+    )
+
+
+def test_grader_rejects_first_person_claim_for_an_external_change(monkeypatch):
+    result = e5_reply_after_external_cancel("I've cancelled your check-up.", monkeypatch)
+    (failed,) = result.failed_checks
+    assert failed.name == "claims_match_ehr"
+    assert "claimed as done by the agent but not verified: ['cancel_appointment']" in failed.detail
+
+
+def test_grader_accepts_state_claim_for_an_external_change(monkeypatch):
+    result = e5_reply_after_external_cancel(
+        "Your check-up has already been cancelled. Shall I book a new one?", monkeypatch
+    )
+    assert result.status == "pass", [(c.name, c.detail) for c in result.failed_checks]

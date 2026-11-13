@@ -108,6 +108,14 @@ data. A success-language detector is a secondary backstop only. Blocked replies 
 re-prompt, then a deterministic ledger-based fallback.
 **Why:** Keyword matching alone is brittle; structured outcomes are checkable.
 
+**Amendment (IMP-002, M4.4b):** the ledger keeps two kinds of evidence apart: verified actions
+(now with a `record_id`) and appointment states observed in fresh EHR reads. First-person claims
+("I've cancelled it") need a verified action of that type; state claims ("it is already
+cancelled") may also rest on an observation, and only cancelled observations count (a "booked"
+read can go stale). Free text names no records, so the evidence must point to exactly one record,
+otherwise the model must list the action_id. Wording patterns only decide which kind of evidence a
+sentence needs.
+
 ## ADR-012 — Atomic reschedule
 **Status:** Accepted
 **Decision:** Reschedule is one EHR operation (move slot, bump version) in one transaction.

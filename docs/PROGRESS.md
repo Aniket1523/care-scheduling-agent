@@ -101,7 +101,13 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [ ] M4.4a Owner: real run `python -m care_agent eval --record-evidence` = the "before"
       (expected exit 1 against the old baseline; do not update the baseline). Offline regrade of
       older traces under these checks: `181154Z` 3/6 (E2, E5, E6), `160955Z` 5/6 (E6)
-- [ ] M4.4b IMP-002 claim guard uses appointment-scoped EHR evidence
+- [x] M4.4a owner run `20261113T053628Z` (evidence recorded): E2 and E6 fail under the new checks;
+      E4 and E5 errored with 429 RESOURCE_EXHAUSTED, so it is not a complete before-score
+- [x] M4.4b IMP-002 claim guard: verified actions (with `record_id`) vs fresh EHR observations;
+      first-person claims need a verified action, state claims may use a cancelled observation,
+      evidence must point to one record; grader `claims_match_ehr` split the same way; prompt asks
+      to re-list action IDs and never claim a cancellation the agent did not make. 13 new tests;
+      5 of the new guard tests fail on the committed guard (checked)
 - [ ] M4.4c IMP-003 consent policy in the prompt; IMP-004 escalation reporting. Race findings to
       address (from the M4.4 review probe): the unique index `ux_one_open_escalation_per_call`
       already makes one-open-escalation-per-call atomic (a forced race left 1 row and rolled the

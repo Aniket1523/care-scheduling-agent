@@ -331,7 +331,7 @@ class ToolRunner:
         self.state.verified_patient = fresh
         self.state.unmatched_identity = None
         summary = f"Registered {fresh.first_name} {fresh.last_name} as a new patient."
-        self._record(action_id, "register_patient", "verified", summary)
+        self._record(action_id, "register_patient", "verified", summary, record_id=fresh.id)
         return ok({"registered": summary}, action_id=action_id, verified=True)
 
     # --- Reads ---------------------------------------------------------------------
@@ -366,9 +366,10 @@ class ToolRunner:
         patient = self.state.verified_patient
         if patient is None:
             return _verification_required()
-        return ok(
-            [self._describe(a) for a in repo.list_appointments_for_patient(self.conn, patient.id)]
-        )
+        appointments = repo.list_appointments_for_patient(self.conn, patient.id)
+        for appointment in appointments:
+            self._observe(appointment)
+        return ok([self._describe(a) for a in appointments])
 
     # --- Writes --------------------------------------------------------------------
 
@@ -421,7 +422,8 @@ class ToolRunner:
             )
         appointment = booked[0]
         summary = f"{self._describe(appointment)['summary']} is booked."
-        self._record(action_id, "book_appointment", "verified", summary)
+        self._observe(appointment)
+        self._record(action_id, "book_appointment", "verified", summary, record_id=appointment.id)
         return ok(self._describe(appointment), action_id=action_id, verified=True)
 
     def cancel_appointment(self, appointment_id: str, reason: str | None = None) -> dict:
@@ -548,14 +550,15 @@ class ToolRunner:
                 outcome = "timeout" if isinstance(exc, EHRTimeout) else str(exc.code)
                 self._log_attempt(operation, action_id, attempt_no, outcome)
                 if isinstance(exc, EHRError) and exc.code not in _UNCERTAIN:
-                    self._record(action_id, operation, "failed")
+                    self._record(action_id, operation, "failed", record_id=before.id)
                     return failed(exc.code, str(exc), action_id=action_id, guidance=_TELL_THE_TRUTH)
                 current = repo.get_appointment(self.conn, before.id)
                 self._log_read(operation, action_id, _appointment_state(current))
+                self._observe(current)
                 if current is not None and done(current):
                     break
                 if current is None or current.version != before.version:
-                    self._record(action_id, operation, "failed")
+                    self._record(action_id, operation, "failed", record_id=before.id)
                     return failed(
                         ErrorCode.STALE_VERSION,
                         "the appointment was changed elsewhere during this request",
@@ -565,8 +568,9 @@ class ToolRunner:
 
         current = repo.get_appointment(self.conn, before.id)
         self._log_read(operation, action_id, _appointment_state(current))
+        self._observe(current)
         if current is None or not done(current):
-            self._record(action_id, operation, "failed")
+            self._record(action_id, operation, "failed", record_id=before.id)
             return failed(
                 "NOT_CONFIRMED",
                 "the EHR does not show this change",
@@ -575,7 +579,11 @@ class ToolRunner:
             )
         description = self._describe(current)
         self._record(
-            action_id, operation, "verified", f"{description['summary']} {verified_suffix}"
+            action_id,
+            operation,
+            "verified",
+            f"{description['summary']} {verified_suffix}",
+            record_id=before.id,
         )
         return ok(description, action_id=action_id, verified=True)
 
@@ -613,6 +621,8 @@ class ToolRunner:
         except EHRError as exc:
             return failed(exc.code, str(exc), guidance="Use an apt_ ID from list_my_appointments.")
         appointment = repo.get_appointment(self.conn, appointment_id)
+        if appointment is not None and appointment.patient_id == patient.id:
+            self._observe(appointment)  # never record another patient's appointment
         if appointment is None or appointment.patient_id != patient.id:
             # Same answer whether it does not exist or belongs to someone else.
             return failed(
@@ -647,8 +657,14 @@ class ToolRunner:
         operation: Operation,
         status: OutcomeStatus,
         summary: str | None = None,
+        record_id: str | None = None,
     ) -> None:
-        self.state.ledger.record(LedgerEntry(action_id, operation, status, summary))
+        self.state.ledger.record(LedgerEntry(action_id, operation, status, summary, record_id))
+
+    def _observe(self, appointment: Appointment | None) -> None:
+        """Note an appointment's state from a fresh EHR read (evidence of state, not action)."""
+        if appointment is not None:
+            self.state.ledger.observe(appointment.id, appointment.status)
 
 
 def _identity_failed(identity_status: str, result: dict) -> dict:

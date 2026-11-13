@@ -683,3 +683,167 @@ def test_demo_seed_is_deterministic_and_on_weekdays():
 def test_demo_seed_gives_maria_one_booked_appointment(ehr):
     appointments = repo.list_appointments_for_patient(ehr, "pat_maria")
     assert [(a.id, a.status) for a in appointments] == [(MARIA_APT, "booked")]
+
+
+# --- IMP-002: agent actions vs EHR observations ------------------------------------------
+
+OTHER_APT = "apt_other"
+
+
+def ledger_with(*entries, observed=None):
+    ledger = OutcomeLedger()
+    for entry in entries:
+        ledger.record(entry)
+    for appointment_id, status in (observed or {}).items():
+        ledger.observe(appointment_id, status)
+    return ledger
+
+
+VERIFIED_CANCEL = LedgerEntry(
+    "act_c", "cancel_appointment", "verified", "Check-up ... is cancelled.", MARIA_APT
+)
+FAILED_CANCEL = LedgerEntry("act_f", "cancel_appointment", "failed", None, MARIA_APT)
+
+
+def test_verified_cancellation_supports_first_person_claim():
+    ledger = ledger_with(VERIFIED_CANCEL, observed={MARIA_APT: "cancelled"})
+    assert check_reply("I've cancelled it.", ["act_c"], ledger).ok
+    # Restating it later without the ID is still backed: one verified cancellation.
+    assert check_reply("As I said, I've cancelled your check-up.", [], ledger).ok
+
+
+def test_fresh_ehr_observation_supports_already_cancelled_state():
+    ledger = ledger_with(observed={MARIA_APT: "cancelled"})
+    for message in (
+        "It is already cancelled.",
+        "Your appointment has already been cancelled, so I couldn't reschedule it.",
+    ):
+        assert check_reply(message, [], ledger).ok, message
+
+
+def test_fresh_ehr_observation_does_not_support_first_person_claim():
+    ledger = ledger_with(observed={MARIA_APT: "cancelled"})
+    decision = check_reply("I've cancelled it.", [], ledger)
+    assert not decision.ok
+    assert "no verified cancel_appointment action" in decision.problems[0]
+
+
+def test_failed_cancellation_supports_no_cancellation_claim():
+    ledger = ledger_with(FAILED_CANCEL, observed={MARIA_APT: "booked"})
+    for message in ("I've cancelled it.", "Your check-up has been cancelled.", "It is cancelled."):
+        assert not check_reply(message, [], ledger).ok, message
+    assert not check_reply("It is cancelled.", ["act_f"], ledger).ok
+
+
+def test_booked_observation_never_supports_a_claim():
+    # A "booked" read can go stale (F5); only cancelled observations count as evidence.
+    ledger = ledger_with(observed={MARIA_APT: "booked"})
+    assert not check_reply("Your check-up is booked for Monday.", [], ledger).ok
+
+
+def test_ambiguous_evidence_requires_the_action_id():
+    first = VERIFIED_CANCEL
+    second = LedgerEntry(
+        "act_d", "cancel_appointment", "verified", "Other ... is cancelled.", OTHER_APT
+    )
+    ledger = ledger_with(first, second, observed={MARIA_APT: "cancelled", OTHER_APT: "cancelled"})
+    decision = check_reply("It has been cancelled.", [], ledger)
+    assert not decision.ok
+    assert "more than one record" in decision.problems[0]
+    assert check_reply("It has been cancelled.", ["act_c"], ledger).ok
+
+
+def test_claim_kinds_are_classified():
+    from care_agent.agent.guard import classify_claims
+
+    assert classify_claims("I've cancelled it.") == ({"cancel_appointment"}, set())
+    assert classify_claims("It has already been cancelled.") == (set(), {"cancel_appointment"})
+    assert classify_claims("I've gone ahead and booked a new check-up.") == (
+        {"book_appointment"},
+        set(),
+    )
+    for neither in (
+        "I haven't cancelled it yet.",
+        "It has not been cancelled.",
+        "I tried to cancel your check-up, but it didn't go through.",
+        "I'll cancel it now.",
+    ):
+        assert classify_claims(neither) == (set(), set()), neither
+
+
+def test_tools_record_observations_and_record_ids(ehr):
+    state = ConversationState(call_id="call_test", caller_phone=MARIA_PHONE)
+    runner = ToolRunner(ehr, state, lambda: NOW)
+    runner.execute("verify_identity", MARIA)
+    runner.execute("list_my_appointments", {})
+    assert state.ledger.observed == {MARIA_APT: "booked"}
+    result = runner.execute("cancel_appointment", {"appointment_id": MARIA_APT})
+    assert state.ledger.observed == {MARIA_APT: "cancelled"}
+    assert state.ledger.get(result["action_id"]).record_id == MARIA_APT
+
+
+def test_already_cancelled_reply_is_delivered_after_external_cancel(ehr):
+    # Run 20261112T181154Z, E5 turn 1: the clinic cancelled the appointment; the agent's
+    # truthful explanation was rejected and it then booked something unrequested.
+    message = (
+        "I'm sorry, Maria, your appointment has already been cancelled, so we couldn't "
+        "reschedule it directly. Would you like me to book a new appointment on Tuesday "
+        "17 November at 09:00 instead, or would you like a staff member to call you back?"
+    )
+    agent, model, _ = make_agent(
+        ehr,
+        [
+            call("verify_identity", **MARIA),
+            call("list_my_appointments"),
+            reply("You have a check-up on Monday."),
+            call("list_my_appointments"),
+            call("reschedule_appointment", appointment_id=MARIA_APT, new_slot_id=TUE_0900),
+            reply(message),
+        ],
+    )
+    agent.respond("Maria Garcia 1985-03-14, what do I have?")
+    seen = repo.get_appointment(ehr, MARIA_APT)
+    service.cancel_appointment(ehr, MARIA_APT, expected_version=seen.version, now=NOW)
+    final = agent.respond("Please move my check-up to Tuesday 17 November at 09:00.")
+    assert result_of(model, 5)["error"]["code"] == "ALREADY_CANCELLED"
+    assert final == message  # delivered first time, no rejection
+    model.assert_finished()
+
+
+def test_first_person_claim_after_external_cancel_is_rejected(ehr):
+    agent, model, _ = make_agent(
+        ehr,
+        [
+            call("verify_identity", **MARIA),
+            call("list_my_appointments"),
+            reply("I've cancelled your check-up."),  # the clinic did, not the agent
+            reply("Your check-up is already cancelled."),
+        ],
+    )
+    seen = repo.get_appointment(ehr, MARIA_APT)
+    service.cancel_appointment(ehr, MARIA_APT, expected_version=seen.version, now=NOW)
+    final = agent.respond("Maria Garcia 1985-03-14, is my check-up still on?")
+    assert result_of(model, 3)["status"] == "rejected"
+    assert final == "Your check-up is already cancelled."
+    model.assert_finished()
+
+
+def test_truthful_restatement_after_own_cancellation_is_not_rejected(ehr):
+    # Run 20261112T181154Z, E4 turn 1: the agent had cancelled and verified in turn 0;
+    # restating it without the action ID was rejected.
+    restated = (
+        "Your check-up appointment has already been cancelled. "
+        "Is there anything else I can help you with today?"
+    )
+    agent, model, _ = make_agent(
+        ehr,
+        [
+            call("verify_identity", **MARIA),
+            call("cancel_appointment", appointment_id=MARIA_APT),
+            reply_confirming_last("I have successfully cancelled your check-up."),
+            reply(restated),
+        ],
+    )
+    agent.respond("Maria Garcia 1985-03-14. Please cancel my check-up.")
+    assert agent.respond("Yes, please cancel it.") == restated
+    model.assert_finished()
