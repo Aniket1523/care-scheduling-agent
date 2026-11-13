@@ -211,6 +211,10 @@ class ToolRunner:
         self.faults = faults
         # Action IDs written during the current turn (used for fallback replies).
         self.turn_actions: list[str] = []
+        # Evaluation trace only (tool_attempt, reconcile_read, fault_injected events).
+        # Never part of a tool result: the model does not see retries or faults.
+        self.attempt_log: list[dict[str, Any]] = []
+        self._faults_logged = 0
         self._handlers: dict[str, Callable[..., dict]] = {
             "verify_identity": self.verify_identity,
             "register_patient": self.register_patient,
@@ -374,7 +378,7 @@ class ToolRunner:
             return _verification_required()
         action_id = self._new_action()
         error: EHRError | None = None
-        for _ in range(MAX_WRITE_ATTEMPTS):
+        for attempt_no in range(1, MAX_WRITE_ATTEMPTS + 1):
             try:
                 service.book_appointment(
                     self.conn,
@@ -385,10 +389,13 @@ class ToolRunner:
                     now=self.clock(),
                     faults=self.faults,
                 )
+                self._log_attempt("book_appointment", action_id, attempt_no, "ok")
                 break
             except EHRTimeout:
+                self._log_attempt("book_appointment", action_id, attempt_no, "timeout")
                 continue  # same action_id: a retry can never book twice
             except EHRError as exc:
+                self._log_attempt("book_appointment", action_id, attempt_no, str(exc.code))
                 if exc.code in _UNCERTAIN:
                     continue
                 error = exc
@@ -403,6 +410,7 @@ class ToolRunner:
             for a in repo.list_appointments_for_patient(self.conn, patient.id)
             if a.slot_id == slot_id and a.status == "booked"
         ]
+        self._log_read("book_appointment", action_id, "booked" if booked else "not booked")
         if not booked:
             self._record(action_id, "book_appointment", "failed")
             return failed(
@@ -472,7 +480,7 @@ class ToolRunner:
         action_id = self._new_action()
         patient = self.state.verified_patient
         error: EHRError | None = None
-        for _ in range(MAX_WRITE_ATTEMPTS):
+        for attempt_no in range(1, MAX_WRITE_ATTEMPTS + 1):
             try:
                 service.create_escalation(
                     self.conn,
@@ -483,10 +491,13 @@ class ToolRunner:
                     patient_id=patient.id if patient else None,
                     faults=self.faults,
                 )
+                self._log_attempt("escalate_to_staff", action_id, attempt_no, "ok")
                 break
             except EHRTimeout:
+                self._log_attempt("escalate_to_staff", action_id, attempt_no, "timeout")
                 continue
             except EHRError as exc:
+                self._log_attempt("escalate_to_staff", action_id, attempt_no, str(exc.code))
                 if exc.code in _UNCERTAIN:
                     continue
                 error = exc
@@ -496,6 +507,9 @@ class ToolRunner:
             return failed(error.code, str(error), action_id=action_id, guidance=_TELL_THE_TRUTH)
 
         escalation = repo.find_open_escalation(self.conn, self.state.call_id)
+        self._log_read(
+            "escalate_to_staff", action_id, "open" if escalation else "no open escalation"
+        )
         if escalation is None:
             self._record(action_id, "create_escalation", "failed")
             return failed(
@@ -525,15 +539,19 @@ class ToolRunner:
         intended change, the write happened (e.g. timeout after commit); if it is
         unchanged, retrying is safe; if someone else changed it, stop.
         """
-        for _ in range(MAX_WRITE_ATTEMPTS):
+        for attempt_no in range(1, MAX_WRITE_ATTEMPTS + 1):
             try:
                 attempt()
+                self._log_attempt(operation, action_id, attempt_no, "ok")
                 break
             except (EHRTimeout, EHRError) as exc:
+                outcome = "timeout" if isinstance(exc, EHRTimeout) else str(exc.code)
+                self._log_attempt(operation, action_id, attempt_no, outcome)
                 if isinstance(exc, EHRError) and exc.code not in _UNCERTAIN:
                     self._record(action_id, operation, "failed")
                     return failed(exc.code, str(exc), action_id=action_id, guidance=_TELL_THE_TRUTH)
                 current = repo.get_appointment(self.conn, before.id)
+                self._log_read(operation, action_id, _appointment_state(current))
                 if current is not None and done(current):
                     break
                 if current is None or current.version != before.version:
@@ -546,6 +564,7 @@ class ToolRunner:
                     )
 
         current = repo.get_appointment(self.conn, before.id)
+        self._log_read(operation, action_id, _appointment_state(current))
         if current is None or not done(current):
             self._record(action_id, operation, "failed")
             return failed(
@@ -559,6 +578,30 @@ class ToolRunner:
             action_id, operation, "verified", f"{description['summary']} {verified_suffix}"
         )
         return ok(description, action_id=action_id, verified=True)
+
+    def _log_attempt(self, tool: str, action_id: str, attempt: int, outcome: str) -> None:
+        """Record one internal write attempt, preceded by any fault it triggered."""
+        fired = self.faults.fired if self.faults else []
+        for operation, mode in fired[self._faults_logged :]:
+            self.attempt_log.append(
+                {"event": "fault_injected", "operation": operation, "mode": str(mode)}
+            )
+        self._faults_logged = len(fired)
+        self.attempt_log.append(
+            {
+                "event": "tool_attempt",
+                "tool": tool,
+                "action_id": action_id,
+                "attempt": attempt,
+                "outcome": outcome,
+            }
+        )
+
+    def _log_read(self, tool: str, action_id: str, found: str) -> None:
+        """Record a read of the EHR made to confirm or reconcile a write."""
+        self.attempt_log.append(
+            {"event": "reconcile_read", "tool": tool, "action_id": action_id, "found": found}
+        )
 
     def _owned_appointment(self, appointment_id: str) -> Appointment | dict:
         """Fresh read of an appointment that belongs to the verified patient."""
@@ -621,6 +664,12 @@ def _unreadable_dob() -> dict:
             "(day, month name and year) and call again with date_of_birth as YYYY-MM-DD."
         ),
     )
+
+
+def _appointment_state(appointment: Appointment | None) -> str:
+    if appointment is None:
+        return "missing"
+    return f"{appointment.status} in {appointment.slot_id} (version {appointment.version})"
 
 
 def _verification_required() -> dict:

@@ -7,6 +7,11 @@ Outputs, under ``runs/<run_id>/`` (git-ignored):
 * ``results.json``  - per-scenario status, checks and model-call counts.
 * ``failures.json`` - a structured report for every failed or errored scenario.
 
+With ``--record-evidence`` it also writes ``evals/evidence/<run_id>.json``
+(committed): a compact, sanitised summary of the run. No caller or agent text,
+no tool arguments beyond record IDs, no error messages, never the API key.
+Evidence is written whatever the exit code, including 1 (regression).
+
 The baseline (``evals/baseline.json``, committed) records which scenarios
 passed. Exit codes:
 
@@ -28,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from care_agent.agent.loop import ModelClient
+from care_agent.evals.grading import write_attempts
 from care_agent.evals.runner import ScenarioResult, failure_report, run_scenario
 from care_agent.evals.scenarios import SCENARIOS, SCENARIOS_BY_ID, Scenario
 
@@ -37,6 +43,7 @@ EXIT_INCOMPLETE = 2
 
 DEFAULT_BASELINE = Path("evals/baseline.json")
 DEFAULT_RUNS_DIR = Path("runs")
+DEFAULT_EVIDENCE_DIR = Path("evals/evidence")
 
 
 def load_baseline(path: Path) -> dict[str, str]:
@@ -61,6 +68,9 @@ def run_eval(
     client_factory: Callable[[Scenario], ModelClient] | None = None,
     baseline_path: Path = DEFAULT_BASELINE,
     runs_dir: Path = DEFAULT_RUNS_DIR,
+    record_evidence: bool = False,
+    evidence_dir: Path = DEFAULT_EVIDENCE_DIR,
+    model_label: str = "scripted",
     write: Callable[[str], None] = print,
 ) -> int:
     unknown = [s for s in scenario_ids or [] if s not in SCENARIOS_BY_ID]
@@ -77,9 +87,9 @@ def run_eval(
         from care_agent.evals.scenarios import EVAL_NOW
 
         try:
-            client = GeminiClient(
-                LLMSettings.from_env(), build_system_prompt(EVAL_NOW.date()), TOOL_DECLARATIONS
-            )
+            settings = LLMSettings.from_env()
+            client = GeminiClient(settings, build_system_prompt(EVAL_NOW.date()), TOOL_DECLARATIONS)
+            model_label = f"{settings.provider}/{settings.model}"
         except ConfigError as exc:
             print(f"Configuration error: {exc}", file=sys.stderr)
             return EXIT_INCOMPLETE
@@ -107,10 +117,70 @@ def run_eval(
             write(f"Baseline updated: {baseline_path}")
 
     if regressed:
-        return EXIT_REGRESSION
-    if any(r.status == "error" for r in results):
-        return EXIT_INCOMPLETE
-    return EXIT_OK
+        exit_code = EXIT_REGRESSION
+    elif any(r.status == "error" for r in results):
+        exit_code = EXIT_INCOMPLETE
+    else:
+        exit_code = EXIT_OK
+
+    if record_evidence:
+        path = _write_evidence(
+            evidence_dir, run_id, model_label, scenarios, results, baseline, regressed, exit_code
+        )
+        write(f"Evidence recorded: {path}")
+    return exit_code
+
+
+def _write_evidence(
+    evidence_dir: Path,
+    run_id: str,
+    model_label: str,
+    scenarios: Sequence[Scenario],
+    results: Sequence[ScenarioResult],
+    baseline: dict[str, str],
+    regressed: Sequence[str],
+    exit_code: int,
+) -> Path:
+    """Compact, sanitised record of a run, meant to be committed."""
+    by_id = {s.id: s for s in scenarios}
+    evidence = {
+        "run_id": run_id,
+        "model": model_label,
+        "exit_code": exit_code,
+        "score": {"passed": sum(r.status == "pass" for r in results), "total": len(results)},
+        "baseline_score": {
+            "passed": sum(baseline.get(r.scenario_id) == "pass" for r in results),
+            "total": len(results),
+        },
+        "regressions": list(regressed),
+        "scenarios": [
+            {
+                "id": r.scenario_id,
+                "failure_pattern": by_id[r.scenario_id].failure_pattern,
+                "baseline": baseline.get(r.scenario_id, "n/a"),
+                "status": r.status,
+                "checks": {c.name: c.passed for c in r.checks},
+                "failed_checks": [{"name": c.name, "detail": c.detail} for c in r.failed_checks],
+                "model_calls": r.model_calls,
+                "guard_rejections": r.guard_rejections,
+                "write_attempts": [
+                    {"turn": a.turn, "tool": a.tool} for a in write_attempts(r.events)
+                ],
+                "faults_injected": [
+                    {"operation": e["operation"], "mode": e["mode"]}
+                    for e in r.events
+                    if e["event"] == "fault_injected"
+                ],
+                # The exception type only: API error messages are not evidence.
+                "error_type": r.error.split(":", 1)[0] if r.error else None,
+            }
+            for r in results
+        ],
+    }
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    path = evidence_dir / f"{run_id}.json"
+    path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def _update_baseline(
@@ -152,6 +222,7 @@ def _write_outputs(
                 "scenario_id": r.scenario_id,
                 "status": r.status,
                 "model_calls": r.model_calls,
+                "guard_rejections": r.guard_rejections,
                 "error": r.error,
                 "checks": [_check_dict(c) for c in r.checks],
             }
@@ -186,20 +257,27 @@ def _print_summary(
 ) -> None:
     by_id = {s.id: s for s in scenarios}
     write("")
-    write(f"{'ID':4} {'Pattern':12} {'Baseline':9} {'Now':6} {'Calls':5}  Failed checks")
+    write(
+        f"{'ID':4} {'Pattern':12} {'Baseline':9} {'Now':6} {'Calls':5} {'Rejected':8}  "
+        "Failed checks"
+    )
     for r in results:
         failed = ", ".join(c.name for c in r.failed_checks) or (
             "-" if r.status != "error" else "model error"
         )
         write(
             f"{r.scenario_id:4} {by_id[r.scenario_id].failure_pattern:12} "
-            f"{baseline.get(r.scenario_id, 'n/a'):9} {r.status:6} {r.model_calls:5}  {failed}"
+            f"{baseline.get(r.scenario_id, 'n/a'):9} {r.status:6} {r.model_calls:5} "
+            f"{r.guard_rejections:8}  {failed}"
         )
     passed = sum(r.status == "pass" for r in results)
     before = sum(baseline.get(r.scenario_id) == "pass" for r in results)
     write("")
     write(f"Score: {passed}/{len(results)} passed (baseline: {before}/{len(results)})")
     write(f"Model calls: {sum(r.model_calls for r in results)}")
+    write(
+        f"Claim-guard rejections: {sum(r.guard_rejections for r in results)} (reported, not graded)"
+    )
     if not baseline:
         write("No baseline yet: run again with --update-baseline to record one.")
     for scenario_id in regressed:

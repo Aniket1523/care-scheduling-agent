@@ -32,6 +32,9 @@ class FaultMode(StrEnum):
 @dataclass
 class FaultPlan:
     queues: dict[str, list[FaultMode | None]] = field(default_factory=dict)
+    # Faults actually injected, in order, as (operation, mode). Read by the
+    # evaluation trace only; never visible to the EHR's caller.
+    fired: list[tuple[str, FaultMode]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         unknown = set(self.queues) - WRITE_OPERATIONS
@@ -40,4 +43,7 @@ class FaultPlan:
 
     def next_fault(self, operation: str) -> FaultMode | None:
         queue = self.queues.get(operation)
-        return queue.pop(0) if queue else None
+        fault = queue.pop(0) if queue else None
+        if fault is not None:
+            self.fired.append((operation, fault))
+        return fault

@@ -170,3 +170,20 @@ name + DOB match decides. Ambiguous matches stay ambiguous. Lookup never creates
 (§4, §10) and the phone-only `lookup_caller` tool in §7.2, which is revisited in M2.
 **Why:** Caller ID can belong to someone else (F3) and can be spoofed; acting on the wrong patient's
 record is worse than asking two questions.
+
+## ADR-020 - Consent policy and action authorisation
+**Status:** Accepted (owner decision, M4.4)
+**Decision:** An explicit, unambiguous caller request authorises exactly the requested action once
+identity is verified and every material parameter is resolved ("Cancel my check-up"; "Move my
+check-up to Tuesday at 9 AM with Dr Lee"; "Book the earliest available cleaning"). A vague request
+("Book me a cleaning") does not let the agent pick a slot. An alternative the agent offers is not
+authorised until the caller accepts it. No blanket rule requiring a separate "Yes" before every
+write. Escalations are actions too: a caller's request authorises one; a repeated request for the
+same callback must not write again.
+**E6:** "Yes, cancel it." (answering an offered callback) restates the cancellation and does not
+clearly accept the callback, so it does not authorise an escalation; a correct agent asks again.
+The scenario script is kept as committed rather than reworded after seeing results.
+**Enforcement:** graded by the evaluation check `actions_authorised`, not enforced at runtime. At
+runtime the policy is a prompt rule (changed in IMP-003). No intent-classification subsystem.
+**Why:** Run `20261112T181154Z` (E5) showed the agent booking a new appointment the caller had not
+requested; the existing 6/6 grade did not detect it.

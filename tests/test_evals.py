@@ -12,8 +12,14 @@ import json
 import pytest
 
 from agent_fakes import ScriptedModel, call, reply, reply_confirming_last
-from care_agent.agent.state import OutcomeLedger
-from care_agent.evals.grading import claimed_by_agent
+from care_agent.agent.state import LedgerEntry, OutcomeLedger
+from care_agent.ehr import service
+from care_agent.evals.grading import (
+    WriteAttempt,
+    check_authorisation,
+    claimed_by_agent,
+    write_attempts,
+)
 from care_agent.evals.runner import run_scenario
 from care_agent.evals.scenarios import (
     FRI_0900_LEE,
@@ -23,6 +29,8 @@ from care_agent.evals.scenarios import (
     SCENARIOS_BY_ID,
 )
 from care_agent.evals.suite import EXIT_INCOMPLETE, EXIT_OK, EXIT_REGRESSION, run_eval
+from care_agent.ids import new_id
+from ehr_data import NOW
 
 MARIA = {"first_name": "Maria", "last_name": "Garcia", "date_of_birth": "1985-03-14"}
 LUIS = {"first_name": "Luis", "last_name": "Garcia", "date_of_birth": "1983-07-02"}
@@ -85,7 +93,24 @@ def good_agent(scenario_id: str) -> ScriptedModel:
     return ScriptedModel(steps)
 
 
-@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.id)
+def _expected_outcome(scenario):
+    if scenario.id == "E2":
+        # Known pre-fix defect, not a script problem: the caller's repeat request makes the
+        # escalation tool write again (new action_id, verified: true) for the same open
+        # escalation. IMP-004 fixes the tool; strict=True makes this fail once it passes,
+        # so the marker must then be removed.
+        return pytest.param(
+            scenario,
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="IMP-004: repeat escalation request is still reported as a new write",
+            ),
+            id=scenario.id,
+        )
+    return pytest.param(scenario, id=scenario.id)
+
+
+@pytest.mark.parametrize("scenario", [_expected_outcome(s) for s in SCENARIOS])
 def test_every_scenario_passes_with_a_well_behaved_agent(scenario):
     model = good_agent(scenario.id)
     result = run_scenario(scenario, model)
@@ -245,3 +270,287 @@ def test_trace_file_records_the_conversation_and_grade(tmp_path):
     results = json.loads((run_dir / "results.json").read_text())
     assert results["scenarios"][0]["status"] == "pass"
     assert json.loads((run_dir / "failures.json").read_text()) == []
+
+
+# --- M4.4a: action authorisation (ADR-020) --------------------------------------------
+
+
+def run_e5(steps):
+    model = ScriptedModel(steps)
+    result = run_scenario(SCENARIOS_BY_ID["E5"], model)
+    model.assert_finished()
+    return result
+
+
+def test_unrequested_substitute_booking_fails_authorisation():
+    # Replays run 20261112T181154Z: the reschedule fails (cancelled at the clinic) and the
+    # agent books a new appointment in the same turn, before the caller accepted it.
+    result = run_e5(
+        [
+            call("verify_identity", **MARIA),
+            call("list_my_appointments"),
+            reply("You have a check-up on Monday 16 November at 10:00."),
+            call("list_my_appointments"),
+            call("reschedule_appointment", appointment_id=MARIA_CHECKUP, new_slot_id=TUE_0900),
+            call("book_appointment", service_id="svc_checkup", slot_id=TUE_0900),
+            reply_confirming_last("I have gone ahead and booked a new check-up for you."),
+            reply("It is all set."),
+            reply("Goodbye."),
+        ]
+    )
+    assert result.status == "fail"
+    assert [c.name for c in result.failed_checks] == ["actions_authorised"]
+    detail = result.failed_checks[0].detail
+    assert "book_appointment at turn 1" in detail
+    assert "reschedule" not in detail  # the requested reschedule itself was authorised
+
+
+def test_booking_after_caller_accepts_offer_is_authorised():
+    result = run_e5(
+        [
+            call("verify_identity", **MARIA),
+            call("list_my_appointments"),
+            reply("You have a check-up on Monday 16 November at 10:00."),
+            call("reschedule_appointment", appointment_id=MARIA_CHECKUP, new_slot_id=TUE_0900),
+            reply("That appointment was already cancelled at the clinic. Book a new one?"),
+            call("book_appointment", service_id="svc_checkup", slot_id=TUE_0900),
+            reply_confirming_last("Done."),
+            reply("Goodbye."),
+        ]
+    )
+    assert result.status == "pass", [(c.name, c.detail) for c in result.failed_checks]
+
+
+@pytest.mark.parametrize(
+    ("scenario_id", "expected"),
+    [("E1", [(0, "book_appointment")]), ("E4", [(1, "cancel_appointment")])],
+)
+def test_explicit_request_needs_no_separate_yes(scenario_id, expected):
+    result = run_scenario(SCENARIOS_BY_ID[scenario_id], good_agent(scenario_id))
+    assert [(a.turn, a.tool) for a in write_attempts(result.events)] == expected
+    assert {c.name: c.passed for c in result.checks}["actions_authorised"]
+
+
+def test_validation_rejected_call_is_not_a_write_attempt():
+    # good_agent("E4") first passes a service ID, which is rejected before any EHR write.
+    result = run_scenario(SCENARIOS_BY_ID["E4"], good_agent("E4"))
+    cancels = [
+        e for e in result.events if e["event"] == "tool_call" and e["tool"] == "cancel_appointment"
+    ]
+    assert len(cancels) == 2
+    assert [(a.turn, a.args["appointment_id"]) for a in write_attempts(result.events)] == [
+        (1, MARIA_CHECKUP)
+    ]
+
+
+def test_booking_with_wrong_parameters_fails_authorisation():
+    attempt = WriteAttempt(
+        0, "book_appointment", {"service_id": "svc_cleaning", "slot_id": FRI_1000_KIM}, "act_1"
+    )
+    check = check_authorisation(SCENARIOS_BY_ID["E1"], [attempt])
+    assert not check.passed
+    assert FRI_1000_KIM in check.detail
+
+
+def test_escalation_is_authorised_once_per_request():
+    e2 = SCENARIOS_BY_ID["E2"]
+    first = WriteAttempt(0, "escalate_to_staff", {"reason": "billing"}, "act_1")
+    repeat = WriteAttempt(1, "escalate_to_staff", {"reason": "urgent"}, "act_2")
+    assert check_authorisation(e2, [first]).passed
+    check = check_authorisation(e2, [first, repeat])
+    assert not check.passed
+    assert "escalate_to_staff at turn 1" in check.detail
+    assert "urgent" not in check.detail  # free-text arguments stay out of reports
+
+
+def test_e6_escalation_after_ambiguous_yes_is_unauthorised():
+    e6 = SCENARIOS_BY_ID["E6"]
+    cancel_0 = WriteAttempt(0, "cancel_appointment", {"appointment_id": MARIA_CHECKUP}, "act_1")
+    cancel_1 = WriteAttempt(1, "cancel_appointment", {"appointment_id": MARIA_CHECKUP}, "act_2")
+    escalate_1 = WriteAttempt(1, "escalate_to_staff", {"reason": "cancel failed"}, "act_3")
+    assert check_authorisation(e6, [cancel_0, cancel_1]).passed  # repeating the request is fine
+    assert not check_authorisation(e6, [cancel_0, escalate_1]).passed
+
+
+def test_escalation_consistency_check_compares_ledger_with_records(conn):
+    check = next(
+        e.check
+        for e in SCENARIOS_BY_ID["E2"].expectations
+        if e.name == "escalation_actions_match_records"
+    )
+    service.create_escalation(conn, "call_e2", "billing", action_id=new_id("act"), now=NOW)
+    ledger = OutcomeLedger()
+    ledger.record(LedgerEntry("act_1", "create_escalation", "verified", "callback"))
+    assert check(conn, "call_e2", ledger)
+    ledger.record(LedgerEntry("act_2", "create_escalation", "verified", "callback"))
+    assert not check(conn, "call_e2", ledger)  # two reported escalations, one record
+
+
+# --- M4.4a: trace observability --------------------------------------------------------
+
+
+def internal_events(result):
+    kinds = {"fault_injected", "tool_attempt", "reconcile_read"}
+    return [
+        {k: v for k, v in e.items() if k != "action_id"}
+        for e in result.events
+        if e["event"] in kinds
+    ]
+
+
+def test_trace_records_injected_fault_retry_and_reconcile_read():
+    result = run_scenario(SCENARIOS_BY_ID["E1"], good_agent("E1"))
+    assert internal_events(result) == [
+        {
+            "turn": 0,
+            "event": "fault_injected",
+            "operation": "book_appointment",
+            "mode": "timeout_after_commit",
+        },
+        {
+            "turn": 0,
+            "event": "tool_attempt",
+            "tool": "book_appointment",
+            "attempt": 1,
+            "outcome": "timeout",
+        },
+        {
+            "turn": 0,
+            "event": "tool_attempt",
+            "tool": "book_appointment",
+            "attempt": 2,
+            "outcome": "ok",
+        },
+        {"turn": 0, "event": "reconcile_read", "tool": "book_appointment", "found": "booked"},
+    ]
+
+
+def test_trace_shows_every_failed_cancel_attempt():
+    result = run_scenario(SCENARIOS_BY_ID["E6"], good_agent("E6"))
+    turn_0 = [e for e in internal_events(result) if e["turn"] == 0]
+    assert [e["event"] for e in turn_0].count("fault_injected") == 3
+    assert [e["outcome"] for e in turn_0 if e["event"] == "tool_attempt"] == ["timeout"] * 3
+    reads = [e["found"] for e in turn_0 if e["event"] == "reconcile_read"]
+    assert reads and all(r.startswith("booked") for r in reads)
+
+
+def test_internal_trace_details_never_reach_the_model():
+    allowed = {
+        "status",
+        "data",
+        "error",
+        "guidance",
+        "action_id",
+        "verified",
+        "identity_status",
+        "problems",
+        "verified_actions",
+    }
+    internal_words = (
+        "tool_attempt",
+        "fault_injected",
+        "reconcile_read",
+        "timeout_after_commit",
+        "timeout_before_commit",
+        "error_after_commit",
+    )
+    for scenario_id in ("E1", "E2", "E6"):
+        model = good_agent(scenario_id)
+        run_scenario(SCENARIOS_BY_ID[scenario_id], model)
+        sent = [
+            p.function_response.response
+            for contents in model.seen
+            for content in contents
+            for p in content.parts or []
+            if p.function_response is not None
+        ]
+        assert sent, scenario_id
+        for response in sent:
+            assert set(response) <= allowed, response
+            text = json.dumps(response)
+            assert not any(word in text for word in internal_words), text
+
+
+# --- M4.4a: guard rejections and evidence ----------------------------------------------
+
+
+def e4_with_one_rejected_reply(scenario):
+    return ScriptedModel(
+        [
+            call("verify_identity", **MARIA),
+            reply("Your check-up has been cancelled."),  # nothing cancelled yet: rejected
+            call("cancel_appointment", appointment_id=MARIA_CHECKUP),
+            reply_confirming_last("It is cancelled."),
+            reply("Goodbye."),
+            reply("Bye."),
+        ]
+    )
+
+
+def test_guard_rejections_are_counted_and_reported(tmp_path):
+    output: list[str] = []
+    run_eval(
+        ["E4"],
+        client_factory=e4_with_one_rejected_reply,
+        baseline_path=tmp_path / "baseline.json",
+        runs_dir=tmp_path / "runs",
+        write=output.append,
+    )
+    (run_dir,) = (tmp_path / "runs").iterdir()
+    results = json.loads((run_dir / "results.json").read_text())
+    assert results["scenarios"][0]["guard_rejections"] == 1
+    assert results["scenarios"][0]["status"] == "pass"  # reported, not graded
+    assert any("Rejected" in line for line in output)
+    assert "Claim-guard rejections: 1 (reported, not graded)" in output
+
+
+def test_evidence_is_recorded_on_regression_and_is_sanitised(tmp_path):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"E2": "pass"}))
+    evidence_dir = tmp_path / "evidence"
+    code = run_eval(
+        ["E2"],
+        client_factory=good_agent_for,  # E2 still writes twice before IMP-004
+        baseline_path=baseline,
+        runs_dir=tmp_path / "runs",
+        record_evidence=True,
+        evidence_dir=evidence_dir,
+        write=lambda line: None,
+    )
+    assert code == EXIT_REGRESSION
+    (path,) = evidence_dir.iterdir()
+    evidence = json.loads(path.read_text())
+    assert evidence["exit_code"] == 1
+    assert evidence["model"] == "scripted"
+    assert evidence["regressions"] == ["E2"]
+    assert evidence["score"] == {"passed": 0, "total": 1}
+    assert evidence["baseline_score"] == {"passed": 1, "total": 1}
+    (e2,) = evidence["scenarios"]
+    assert e2["status"] == "fail"
+    assert {f["name"] for f in e2["failed_checks"]} == {
+        "actions_authorised",
+        "escalation_actions_match_records",
+    }
+    assert e2["write_attempts"] == [
+        {"turn": 0, "tool": "escalate_to_staff"},
+        {"turn": 1, "tool": "escalate_to_staff"},
+    ]
+    assert e2["faults_injected"] == [
+        {"operation": "create_escalation", "mode": "error_after_commit"}
+    ]
+    raw = path.read_text()
+    for private in ("Luis", "billing question", "caller asked again", "bill", "1983-07-02"):
+        assert private not in raw
+    assert json.loads(baseline.read_text()) == {"E2": "pass"}  # baseline untouched
+
+
+def test_no_evidence_without_the_flag(tmp_path):
+    run_eval(
+        ["E1"],
+        client_factory=good_agent_for,
+        baseline_path=tmp_path / "baseline.json",
+        runs_dir=tmp_path / "runs",
+        evidence_dir=tmp_path / "evidence",
+        write=lambda line: None,
+    )
+    assert not (tmp_path / "evidence").exists()

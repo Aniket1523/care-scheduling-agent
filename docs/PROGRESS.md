@@ -91,8 +91,26 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [x] M4.3 Regression gate: controlled run on a temp copy of the committed baseline with E1
       deliberately failing -> exit 1, REGRESSION: E1, baseline update refused, committed
       baseline unchanged
-- [ ] M4.3 Real-Gemini eval re-run against the baseline: not run (LLM_API_KEY not available to
-      the tooling; `eval` exited 2 as designed). Owner to run before submission
+- [x] M4.3 Real-Gemini eval re-run against the baseline: owner run `20261112T181154Z` passed 6/6
+      (under the M3 checks); its review found the issues addressed in M4.4
+- [x] M4.4a Evaluation harness: `actions_authorised` (incl. escalations, attempt limits, E6
+      decision per ADR-020), E2 `escalation_actions_match_records`, trace events
+      (`fault_injected`, `tool_attempt`, `reconcile_read`; never sent to the model), claim-guard
+      rejection counts, `--record-evidence` (`evals/evidence/`). No prompt or agent behaviour change.
+      Scripted E2 is a strict xfail until IMP-004 (the tool still writes on a repeat request)
+- [ ] M4.4a Owner: real run `python -m care_agent eval --record-evidence` = the "before"
+      (expected exit 1 against the old baseline; do not update the baseline). Offline regrade of
+      older traces under these checks: `181154Z` 3/6 (E2, E5, E6), `160955Z` 5/6 (E6)
+- [ ] M4.4b IMP-002 claim guard uses appointment-scoped EHR evidence
+- [ ] M4.4c IMP-003 consent policy in the prompt; IMP-004 escalation reporting. Race findings to
+      address (from the M4.4 review probe): the unique index `ux_one_open_escalation_per_call`
+      already makes one-open-escalation-per-call atomic (a forced race left 1 row and rolled the
+      loser back), but the loser surfaces as a raw `sqlite3.IntegrityError` that
+      `ToolRunner.escalate_to_staff` does not catch, so the agent turn would crash. Fix in
+      `service.create_escalation`: keep the order (replay action_id, then open-escalation read,
+      then insert); map only that unique-index violation to "already requested"; let any other
+      SQLite error propagate
+
 ### M4 — Evaluation harness (original plan, superseded by M3 above)
 - [ ] Scenario JSON schema; 8–10 scenarios
 - [ ] Scripted patient simulator

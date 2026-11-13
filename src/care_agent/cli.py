@@ -45,6 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Record this run's pass/fail results as the new baseline (refused on regression).",
     )
+    evaluate.add_argument(
+        "--record-evidence",
+        action="store_true",
+        help="Also write a compact, sanitised summary to evals/evidence/<run_id>.json.",
+    )
 
     return parser
 
@@ -60,7 +65,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "eval":
         from care_agent.evals.suite import run_eval
 
-        return run_eval(args.scenario, update_baseline=args.update_baseline)
+        return run_eval(
+            args.scenario,
+            update_baseline=args.update_baseline,
+            record_evidence=args.record_evidence,
+        )
 
     # argparse rejects unknown subcommands, so this is unreachable.
     raise AssertionError(f"unhandled command: {args.command}")
