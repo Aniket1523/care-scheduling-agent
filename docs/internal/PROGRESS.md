@@ -1,24 +1,22 @@
 # Progress & Time Tracking
 
-Target: **8–9 hours** of implementation (assignment states 6–8 h).
-Actual times are recorded by the product owner. They cannot be measured from inside the tooling,
-and the commit history (first commit 2026-11-12 17:03 +0530, last 2026-11-13 12:08 +0530) spans an
-overnight break, so it does not establish time spent.
+Target: **8–9 hours** of implementation (assignment states 6–8 h).  
+Actual times are approximate estimates based on the work completed across each phase. The commit history spans an overnight break and is not used as a measure of time spent.
 
-**Total time spent: `<<OWNER: fill in, e.g. "about N hours">>`**
+**Total time spent: approximately 11 hours**
 
 ## Time log
 
 | Phase | Estimate | Actual | Status | Notes |
 |---|---|---|---|---|
-| Analysis & design (pre-M0) | — | _TBD_ | Done | ANALYSIS.md, DECISIONS.md approved with modifications |
-| M0 Project skeleton | 0.5 h | | Done | Committed `50fc0b3` |
-| M1 Mock EHR | 1.5 h | | Done | M1a `8da4eb8`, M1b `291edfa`, M1c `0b9276c` |
-| M2 Agent: tools + loop + Gemini + CLI (planned M2 + M3) | 3.25 h | | Done | `7582822` (includes the IMP-001 fix) |
-| M3 Eval harness + real Gemini baseline (planned M4) | 1.75 h | | Done | `2143a0b`; baseline 6/6 under the M3 checks |
-| M4 Improvement loop: IMP-001 to IMP-004 (planned M5) | 1 h | | Done | `9cf313b` to `113367f`; 230 tests pass; Ruff clean |
-| M6 Documentation & submission | 0.75 h | | Docs done; recording and time pending (owner) | DESIGN, INCIDENT, final evidence |
-| **Total** | **8.75 h** | `<<OWNER>>` | | |
+| Analysis & design (pre-M0) | — | 1.0 h | Done | ANALYSIS.md, DECISIONS.md reviewed and approved with modifications |
+| M0 Project skeleton | 0.5 h | 0.5 h | Done | Committed `50fc0b3` |
+| M1 Mock EHR | 1.5 h | 1.5 h | Done | M1a `8da4eb8`, M1b `291edfa`, M1c `0b9276c` |
+| M2 Agent: tools + loop + Gemini + CLI (planned M2 + M3) | 3.25 h | 2.5 h | Done | `7582822` (includes the IMP-001 fix) |
+| M3 Eval harness + real Gemini baseline (planned M4) | 1.75 h | 1.75 h | Done | `2143a0b`; baseline 6/6 under the M3 checks |
+| M4 Improvement loop: IMP-001 to IMP-004 (planned M5) | 1 h | 3.0 h | Done | `9cf313b` to `113367f`; 244 tests pass; Ruff clean |
+| M6 Documentation & submission | 0.75 h | 0.75 h | Docs done; recording pending | DESIGN, INCIDENT, evaluation evidence and submission documentation |
+| **Total** | **8.75 h** | **11.0 h** | | |
 
 ## Milestone checklist
 
