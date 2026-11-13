@@ -62,7 +62,17 @@ python -m care_agent eval
 ```
 
 - Run a subset: `python -m care_agent eval --scenario E3 --scenario E5`
-- Record the current results as the baseline: `python -m care_agent eval --update-baseline`
+- Merge a run's results into the baseline: `python -m care_agent eval --update-baseline`
+  (errored scenarios keep their old entry, so the result can mix runs)
+- Rebuild the baseline from one complete run under the current checks:
+
+  ```bat
+  python -m care_agent eval --rebuild-baseline --record-evidence
+  ```
+
+  It runs all six scenarios and replaces `evals/baseline.json` only if every scenario ran (no
+  `error`) and nothing regressed; otherwise the file is left unchanged and the reason is printed.
+  `--record-evidence` keeps a committed record of the run the baseline came from.
 - Each full run makes roughly 30-60 model calls; the summary prints the exact count.
 - Record committed evidence: `python -m care_agent eval --record-evidence` (see below).
 
@@ -82,6 +92,18 @@ do not change. If the limit persists, the scenario is reported as `error` (`Rate
 
 A model API error marks the scenario `error`, not `fail`: it says nothing about agent behaviour and
 never changes the baseline. `--update-baseline` is refused while any regression is present.
+
+## Three different scores
+
+These are not interchangeable:
+
+| | What it is | Where |
+|---|---|---|
+| **Regression baseline** | The per-scenario pass/fail list the gate compares each run against. It decides exit code 1. | `evals/baseline.json`. Currently all six `pass`, from run `20261112T160955Z` under the older M3 checks (copy kept in `evals/baseline-history/20261112T160955Z-m3-checks.json`). Rebuild with `--rebuild-baseline` to record a single complete run under the current checks. |
+| **Historical pre-improvement score** | What the agent scored before IMP-002/003/004, under the current (M4.4a) checks | Run `20261113T053628Z`: E1 E3 pass, E2 E6 fail, E4 E5 error (429). Incomplete, so not a full score. |
+| **Final current-code score** | What the improved agent scored | E1 E2 E4 E5 in `20261113T063923Z`, E3 in `064153Z`, E6 in `064320Z` (also `063830Z`), all on commit `113367f`: six passes, but split across runs, not one 6/6 run. Later commits add rate-limit handling, the baseline rebuild option, a comment and tests; the agent's prompt, tools, guard and loop are unchanged. |
+
+See `evals/evidence/README.md` for every recorded run.
 
 ## Reading the results
 

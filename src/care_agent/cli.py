@@ -40,10 +40,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="ID",
         help="Run only this scenario (e.g. E1); repeat for several. Default: all.",
     )
-    evaluate.add_argument(
+    baseline = evaluate.add_mutually_exclusive_group()
+    baseline.add_argument(
         "--update-baseline",
         action="store_true",
-        help="Record this run's pass/fail results as the new baseline (refused on regression).",
+        help="Merge this run's pass/fail results into the baseline (refused on regression).",
+    )
+    baseline.add_argument(
+        "--rebuild-baseline",
+        action="store_true",
+        help="Replace the baseline with this run's results; needs all scenarios, "
+        "no errors and no regressions.",
     )
     evaluate.add_argument(
         "--record-evidence",
@@ -68,6 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_eval(
             args.scenario,
             update_baseline=args.update_baseline,
+            rebuild_baseline=args.rebuild_baseline,
             record_evidence=args.record_evidence,
         )
 

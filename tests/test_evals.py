@@ -211,6 +211,68 @@ def good_agent_for(scenario):
     return good_agent(scenario.id)
 
 
+def _rebuild(tmp_path, baseline_content, client_factory, scenario_ids=None):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(baseline_content))
+    output: list[str] = []
+    code = run_eval(
+        scenario_ids,
+        rebuild_baseline=True,
+        client_factory=client_factory,
+        baseline_path=baseline,
+        runs_dir=tmp_path / "runs",
+        write=output.append,
+    )
+    return code, json.loads(baseline.read_text()), output
+
+
+def test_rebuild_baseline_replaces_it_from_one_complete_run(tmp_path):
+    old = {"E1": "fail", "E9": "pass"}  # stale entries must not survive
+    code, baseline, output = _rebuild(tmp_path, old, good_agent_for)
+    assert code == EXIT_OK
+    assert baseline == {s.id: "pass" for s in SCENARIOS}
+    assert any("Baseline rebuilt from this complete run" in line for line in output)
+
+
+def test_rebuild_baseline_refuses_a_subset_before_running(tmp_path):
+    old = {s.id: "pass" for s in SCENARIOS}
+    code, baseline, _ = _rebuild(tmp_path, old, good_agent_for, scenario_ids=["E1"])
+    assert code == EXIT_INCOMPLETE
+    assert baseline == old
+    assert not (tmp_path / "runs").exists()  # no model calls were made
+
+
+def test_rebuild_baseline_refuses_an_incomplete_run(tmp_path):
+    old = {s.id: "pass" for s in SCENARIOS}
+    factory = lambda s: BrokenModel() if s.id == "E3" else good_agent(s.id)  # noqa: E731
+    code, baseline, output = _rebuild(tmp_path, old, factory)
+    assert code == EXIT_INCOMPLETE
+    assert baseline == old
+    assert any(
+        "Baseline NOT rebuilt: the run is incomplete (error in E3)" in line for line in output
+    )
+
+
+def test_rebuild_baseline_refuses_on_regression(tmp_path):
+    old = {s.id: "pass" for s in SCENARIOS}
+    lazy = ScriptedModel(
+        [call("verify_identity", **MARIA), reply("Hmm."), reply("Hmm."), reply("Bye.")]
+    )
+    factory = lambda s: lazy if s.id == "E1" else good_agent(s.id)  # noqa: E731
+    code, baseline, output = _rebuild(tmp_path, old, factory)
+    assert code == EXIT_REGRESSION
+    assert baseline == old
+    assert any("Baseline NOT rebuilt: fix the regression(s) first." in line for line in output)
+
+
+def test_update_and_rebuild_baseline_cannot_be_combined():
+    from care_agent.cli import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["eval", "--update-baseline", "--rebuild-baseline"])
+    assert exc.value.code == 2
+
+
 class BrokenModel:
     def generate(self, contents):
         raise RuntimeError("API quota exceeded")

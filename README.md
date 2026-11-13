@@ -63,9 +63,20 @@ python -m care_agent eval
 Runs six scenarios (one per assignment failure pattern, plus a cancellation that never commits)
 against the real Gemini model, grades them from the EHR state, saves traces and failure reports to
 `runs/`, and exits with code 1 if a scenario that passed in `evals/baseline.json` now fails.
-Exit codes: 0 no regression, 1 regression, 2 could not run (missing key or a model API error such
-as a free-tier 429). A full run makes roughly 30-60 model calls; if the quota is hit, re-run single
-scenarios with `python -m care_agent eval --scenario E3`.
+Exit codes: 0 no regression, 1 regression, 2 could not run (missing key, or a model API error
+such as a free-tier 429 that persists after the built-in backoff). A full run makes roughly 30-60
+model calls, spaced at least 4 seconds apart, so it takes a few minutes. If the quota is still hit,
+re-run single scenarios with `python -m care_agent eval --scenario E3`.
+
+To rebuild the regression baseline from one complete run under the current checks:
+
+```bat
+python -m care_agent eval --rebuild-baseline --record-evidence
+```
+
+It replaces `evals/baseline.json` only if all six scenarios ran without an API error and none
+regressed. The regression baseline, the historical pre-improvement score and the final score are
+different things: see [Three different scores](docs/EVALUATION.md#three-different-scores).
 See [docs/EVALUATION.md](docs/EVALUATION.md) for options, outputs and the improvement loop.
 
 ## Development

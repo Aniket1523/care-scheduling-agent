@@ -68,6 +68,7 @@ def run_eval(
     scenario_ids: Sequence[str] | None = None,
     *,
     update_baseline: bool = False,
+    rebuild_baseline: bool = False,
     client_factory: Callable[[Scenario], ModelClient] | None = None,
     baseline_path: Path = DEFAULT_BASELINE,
     runs_dir: Path = DEFAULT_RUNS_DIR,
@@ -81,6 +82,9 @@ def run_eval(
         print(f"Unknown scenario(s): {', '.join(unknown)}", file=sys.stderr)
         return EXIT_INCOMPLETE
     scenarios = [SCENARIOS_BY_ID[s] for s in scenario_ids] if scenario_ids else list(SCENARIOS)
+    if rebuild_baseline and len(scenarios) != len(SCENARIOS):
+        print("--rebuild-baseline needs a run of every scenario (no --scenario).", file=sys.stderr)
+        return EXIT_INCOMPLETE
 
     if client_factory is None:
         from care_agent.agent.gemini import GeminiClient, RateLimitedClient
@@ -115,7 +119,9 @@ def run_eval(
     _write_outputs(out_dir, run_id, scenarios, results)
     _print_summary(write, scenarios, results, baseline, regressed, out_dir)
 
-    if update_baseline:
+    if rebuild_baseline:
+        _rebuild_baseline(write, baseline_path, results, regressed)
+    elif update_baseline:
         if regressed:
             write("Baseline NOT updated: fix the regression(s) first.")
         else:
@@ -198,6 +204,31 @@ def _update_baseline(
             updated[result.scenario_id] = result.status
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dict(sorted(updated.items())), indent=2) + "\n", encoding="utf-8")
+
+
+def _rebuild_baseline(
+    write: Callable[[str], None],
+    path: Path,
+    results: Sequence[ScenarioResult],
+    regressed: Sequence[str],
+) -> None:
+    """Replace the baseline with this run's results, only if the run was complete.
+
+    Unlike ``--update-baseline`` (which merges and keeps old entries for errored
+    scenarios), every entry then comes from this one run under the current checks.
+    Refused on any error (the run is incomplete) or regression (never lower the gate).
+    """
+    errored = [r.scenario_id for r in results if r.status == "error"]
+    if errored:
+        write(f"Baseline NOT rebuilt: the run is incomplete (error in {', '.join(errored)}).")
+        return
+    if regressed:
+        write("Baseline NOT rebuilt: fix the regression(s) first.")
+        return
+    statuses = {r.scenario_id: r.status for r in results}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(dict(sorted(statuses.items())), indent=2) + "\n", encoding="utf-8")
+    write(f"Baseline rebuilt from this complete run: {path}")
 
 
 def _write_outputs(
