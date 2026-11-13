@@ -1,0 +1,41 @@
+{
+  "run_id": "20261113T064153Z",
+  "model": "gemini/gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "score": {
+    "passed": 1,
+    "total": 1
+  },
+  "baseline_score": {
+    "passed": 1,
+    "total": 1
+  },
+  "regressions": [],
+  "scenarios": [
+    {
+      "id": "E3",
+      "failure_pattern": "F3",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "booked_for_maria": true,
+        "nothing_booked_for_luis": true,
+        "no_duplicate_patient": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 8,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 1,
+          "tool": "book_appointment"
+        }
+      ],
+      "faults_injected": [],
+      "error_type": null
+    }
+  ]
+}

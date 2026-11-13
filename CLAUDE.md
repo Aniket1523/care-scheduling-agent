@@ -74,17 +74,22 @@ python -m care_agent eval
 - Tools return the `ToolResult` envelope (`status`, `data`, `error.code`). `action_id` and `verified`
   appear only on write results (verified = a fresh EHR read confirmed the change); `verify_identity`
   reports `identity_status` instead.
-- Every trace event and EHR audit row carries `call_id`.
+- Each conversation has a `call_id` (session state; escalations store it). Eval trace events carry
+  `run_id` and `scenario_id`, not `call_id`. There is no EHR audit table, and the `chat` CLI does not
+  persist traces.
 - Timestamps come from an injected clock; SQLite files live in a system temp dir, not in OneDrive.
 - Evaluation grading is deterministic (backend state, trace, structured claims). No LLM judge without approval.
 
-## Layout (planned)
+## Layout (as built)
 
 ```
-src/care_agent/   config, cli, ehr/, tools/, agent/, evals/
+src/care_agent/   config, cli, chat, ehr/, agent/ (tools, loop, guard, prompt, state), evals/
 tests/            pytest suites per package
-evals/            scenarios/*.json, baseline.json
-improvements/     IMP-NNN.md (human-written)
+evals/            baseline.json, evidence/ (scenarios live in src/care_agent/evals/scenarios.py)
+improvements/     IMP-NNN.md (human-reviewed; drafted with Claude Code)
+manual-tests/     manual real-model test records
 runs/             eval outputs + traces (git-ignored)
-docs/             design/, PROGRESS.md, AI_USAGE.md, DESIGN.md, INCIDENT.md, RUBRIC.md
+docs/             design/, PROGRESS.md, AI_USAGE.md, DESIGN.md, INCIDENT.md, EVALUATION.md
 ```
+
+The rubric and its blind spots are in `docs/EVALUATION.md`; there is no separate RUBRIC.md.

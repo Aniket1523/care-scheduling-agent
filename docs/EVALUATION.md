@@ -124,7 +124,43 @@ the runs and their findings.
 
 Nothing modifies source code automatically. Tests and scenarios are never weakened to gain a score.
 
+## Why grading reads the EHR, not the transcript
+
+A judge that reads only the conversation, human or LLM, is blind exactly where these failures
+happen:
+
+- **Whether a record exists.** "You're booked for Friday" reads the same whether the booking
+  committed, timed out before commit, or was never attempted (F1, E6).
+- **Duplicates and side effects.** A retry that creates a second escalation (F2) or a second
+  patient record (F3) leaves no trace in the dialogue.
+- **Hidden retries and faults.** Timeouts, retries and reconciliation reads happen inside the tool
+  layer; the caller sees one reply.
+- **Stale reads.** If the clinic cancelled an appointment during the call (F5), the transcript
+  cannot show that the agent acted on an outdated view.
+- **Who made a change.** "It is cancelled" may be true because the clinic cancelled it, not the
+  agent; only the ledger and the EHR can tell the two apart.
+- **Unrequested actions.** A booking the caller never asked for can be described politely.
+
+So every check reads facts: EHR rows (appointments, escalations, patients), the per-call ledger of
+verified actions, structured claims (`confirmed_action_ids`, "Confirmed:" lines rendered from
+verified data), and the list of write attempts. The transcript is used only to find free-text
+claims (wording patterns) and to explain a failure to a human.
+
 ## Known limits (where this evaluation is blind)
+
+- **E4 depends on the model making the F4 mistake.** The scenario invites it (the caller names the
+  service, "my check-up", not an appointment ID), but it only exercises the safeguard if the model
+  actually passes a service ID. In the recorded runs Gemini used the appointment ID, so E4 shows the
+  model avoided the mistake, not that the safeguard caught it. The safeguard itself is proven by
+  `tests/test_agent.py::test_service_id_is_rejected_where_an_appointment_id_belongs` (and
+  `test_cannot_cancel_another_patients_appointment`).
+- **E6's EHR check cannot fail by itself.** Every cancellation is faulted, so `checkup_unchanged`
+  always holds; E6 really tests `claims_match_ehr` and `actions_authorised`.
+- **The baseline predates the current checks.** `evals/baseline.json` was recorded in run
+  `20261112T160955Z` under the M3 checks. It stores only pass/fail per scenario, so it still works
+  as a regression gate, but its 6/6 is not comparable to scores under the stricter M4.4a checks.
+- **The final evidence is split across runs.** See `evals/evidence/README.md`: free-tier rate
+  limits (429) stopped E3 and E6 in the final full run, and they were re-run alone.
 
 - **One run per scenario.** The model is not deterministic; a pass is evidence, not proof. Rare
   failures need repeated runs.
@@ -145,4 +181,9 @@ Nothing modifies source code automatically. Tests and scenarios are never weaken
   chosen, yet a booking made then would pass E5. Seen in run `20261113T062135Z` (the agent offered
   a booking or a callback, then escalated; that escalation correctly failed). Recorded as a known
   limitation; making authorisations offer-aware would need transcript analysis.
+- **Implementation limits the scenarios do not exercise.** Patient registration cannot be faulted
+  (`FaultPlan` covers booking, cancellation, rescheduling and escalation). If the model sends a
+  reply and another write in the same batch, the reply is checked first and the write still runs;
+  the guard would reject any claim about it, and `actions_authorised` grades it, but nothing blocks
+  it at runtime.
 - **Not covered:** speech recognition, latency, real EHR semantics, concurrent callers.

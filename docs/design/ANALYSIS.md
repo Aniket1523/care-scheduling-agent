@@ -1,5 +1,17 @@
 # Care Scheduling Agent — Requirements Analysis & Approved Architecture
 
+> **This is the pre-build analysis and plan (2026-11-12), kept unchanged as a record.** It describes
+> what was planned, not what was built. The as-built system is in `docs/DESIGN.md`,
+> `docs/EVALUATION.md` and `docs/design/DECISIONS.md` (ADRs override this document).
+>
+> Planned here but **not built**: the `audit_log` table (the EHR has no audit table; traces are
+> written only by the eval runner), `docs/RUBRIC.md` (rubric and blind spots are in
+> `docs/EVALUATION.md`), scenario JSON files and 8–10 scenarios (six scenarios, in Python), the
+> `v0-baseline` / `v1` tags, and the `harness_error` failure category (model API errors are
+> reported as status `error`; the other categories exist as hints in `failures.json`). Changed during the build: identity is verified by name and date of
+> birth, with the phone number only a hint (ADR-019), not caller ID first; consent follows
+> ADR-020.
+
 Status: **Approved** (with product-owner / tech-lead modifications, see `DECISIONS.md`)
 Source of truth: `docs/Take-Home_ Software Engineer, Voice AI (v3).pdf` (not committed; `docs/*.pdf` is git-ignored)
 Last updated: 2026-11-12

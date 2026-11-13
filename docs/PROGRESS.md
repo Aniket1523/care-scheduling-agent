@@ -1,7 +1,11 @@
 # Progress & Time Tracking
 
 Target: **8–9 hours** of implementation (assignment states 6–8 h).
-Actual times are recorded by the product owner (wall-clock is not measurable from inside the tooling).
+Actual times are recorded by the product owner. They cannot be measured from inside the tooling,
+and the commit history (first commit 2026-11-12 17:03 +0530, last 2026-11-13 12:08 +0530) spans an
+overnight break, so it does not establish time spent.
+
+**Total time spent: `<<OWNER: fill in, e.g. "about N hours">>`**
 
 ## Time log
 
@@ -11,10 +15,10 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 | M0 Project skeleton | 0.5 h | | Done | Committed `50fc0b3` |
 | M1 Mock EHR | 1.5 h | | Done | M1a `8da4eb8`, M1b `291edfa`, M1c `0b9276c` |
 | M2 Agent: tools + loop + Gemini + CLI (planned M2 + M3) | 3.25 h | | Done | `7582822` (includes the IMP-001 fix) |
-| M3 Eval harness + real Gemini baseline (planned M4) | 1.75 h | | Done | `2143a0b`; baseline 6/6 |
-| M4 Improvement loop: IMP-001, manual test, verification (planned M5) | 1 h | | M4.3 awaiting review | IMP-001 `9cf313b`; 189 tests pass; Ruff clean |
-| M6 Documentation & submission | 0.75 h | | Not started | |
-| **Total** | **8.75 h** | | | |
+| M3 Eval harness + real Gemini baseline (planned M4) | 1.75 h | | Done | `2143a0b`; baseline 6/6 under the M3 checks |
+| M4 Improvement loop: IMP-001 to IMP-004 (planned M5) | 1 h | | Done | `9cf313b` to `113367f`; 230 tests pass; Ruff clean |
+| M6 Documentation & submission | 0.75 h | | Docs done; recording and time pending (owner) | DESIGN, INCIDENT, final evidence |
+| **Total** | **8.75 h** | `<<OWNER>>` | | |
 
 ## Milestone checklist
 
@@ -59,12 +63,13 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [x] 36 new tests with a scripted fake model (no network); mutation-checked
 - [x] Fix from the first real Gemini run: non-ISO dates of birth were rejected at the tool
       boundary, so F3 (Maria on Luis's phone) failed; unambiguous formats now accepted
-- [ ] Manual conversation with a real Gemini key (owner) - re-check after the DOB fix
+- [x] Manual conversation with a real Gemini key (owner): IMP-001 retest and
+      `manual-tests/2026-11-12-reschedule.md`
 - [x] Temporary opt-in tool-call diagnostics (`CARE_AGENT_DEBUG_TOOLS=1`, stderr) for the real-run F3 check
 - [x] Fix from real Gemini diagnostics: identity results carried `verified: false`; contract clarified
       (`identity_status` for identity, `verified` only on writes)
-- [ ] JSONL traces (deferred to the evaluation milestone)
-- [ ] Tag `v0-baseline` after the real-model check
+- [x] JSONL traces (built in the evaluation harness; the chat CLI does not persist traces)
+- [ ] Tag `v0-baseline` (not created; see below)
 
 ### M3 — Evaluation harness and improvement loop (owner numbering)
 - [x] Scenarios E1-E6 (F1-F5 + cancellation that never commits), explicit EHR expectations
@@ -76,7 +81,8 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
 - [x] 16 network-free harness tests (every scenario passes with a well-behaved scripted agent;
       failures, regressions, model errors, traces)
 - [x] Honest baseline with real Gemini: 6/6 (run `20261112T160955Z`, `evals/baseline.json`),
-      recorded after the IMP-001 fix
+      recorded after the IMP-001 fix, under the M3 checks (offline regrade under the later M4.4a
+      checks: 5/6, E6)
 - [x] IMP records for genuine failures: IMP-001 (see M4 below)
 
 ### M4 — Improvement loop (owner numbering)
@@ -98,7 +104,7 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
       (`fault_injected`, `tool_attempt`, `reconcile_read`; never sent to the model), claim-guard
       rejection counts, `--record-evidence` (`evals/evidence/`). No prompt or agent behaviour change.
       Scripted E2 is a strict xfail until IMP-004 (the tool still writes on a repeat request)
-- [ ] M4.4a Owner: real run `python -m care_agent eval --record-evidence` = the "before"
+- [x] M4.4a Owner: real run `python -m care_agent eval --record-evidence` = the "before"
       (expected exit 1 against the old baseline; do not update the baseline). Offline regrade of
       older traces under these checks: `181154Z` 3/6 (E2, E5, E6), `160955Z` 5/6 (E6)
 - [x] M4.4a owner run `20261113T053628Z` (evidence recorded): E2 and E6 fail under the new checks;
@@ -116,26 +122,35 @@ Actual times are recorded by the product owner (wall-clock is not measurable fro
       one-open-escalation unique-index violation maps to already-requested); the tool reports
       `already_requested` with no action; ledger `record_id` for escalations; generic
       `ledger_matches_ehr` check; scripted E2 passes (strict xfail removed). 228 tests pass
-- [ ] Owner: real-Gemini after-run with `--record-evidence --update-baseline`; fill in the IMP-003 and
-      IMP-004 result tables and `evals/evidence/README.md`
+- [x] M4.4c IMP-003 step 2 (`228481a`, after run `062135Z`): one alternative at a time; a bare
+      "yes" to several offers chooses none; a "yes" that restates the request does not accept a callback
+- [x] M4.4c IMP-003 step 3 (`113367f`, after run `063300Z`): failed-write guidance and prompt say to
+      offer a callback and wait for the answer; never escalate in the turn of the failed action
+- [x] IMP-002 record written at submission (`improvements/IMP-002.md`) from the commit and trace
+- [x] Final real-Gemini evidence on `113367f` (all `gemini-3.5-flash-lite`): full run `063923Z`
+      E1 E2 E4 E5 pass, E3 E6 errored (429 free-tier quota); re-run alone: E3 `064153Z` pass,
+      E6 `064320Z` pass (also `063830Z`). All six passed individually; **not one clean 6/6 run**.
+      Index: `evals/evidence/README.md`
+- [x] Baseline not updated: `evals/baseline.json` (6/6 pass, run `160955Z`) already records all six
+      as pass, and `--update-baseline` from split runs would add nothing
 
-### M4 — Evaluation harness (original plan, superseded by M3 above)
-- [ ] Scenario JSON schema; 8–10 scenarios
-- [ ] Scripted patient simulator
-- [ ] Graders: state, trace, claim, outcome; gating
-- [ ] Runner, scoring, results.json, failures.json
-- [ ] Baseline + regression exit code
-- [ ] Harness tests
-
-### M5 — Improvement loop (tag `v1`)
-- [ ] Baseline run recorded (genuine results)
-- [ ] IMP record(s) written and reviewed
-- [ ] Fix commits; re-run shows score movement with no regression
+### Original plan items not built (superseded or descoped)
+- Scenario JSON files and 8–10 scenarios: scenarios are Python (`evals/scenarios.py`), six of them
+- Tags `v0-baseline` / `v1`: not created; commits and evidence files carry the history
+- Audit log table and seed-data module (M1): deferred; see INCIDENT.md "Honest gap"
 
 ### M6 — Submission
-- [ ] README with exactly one agent command and one eval command
-- [ ] `docs/DESIGN.md` (≤1 page, before/after scores, one real-clinic change)
-- [ ] `docs/INCIDENT.md` (≤½ page, uses our traces)
-- [ ] `docs/RUBRIC.md` incl. blind spots
-- [ ] `docs/AI_USAGE.md` complete; total time recorded
+- [x] README with one agent command and one eval command (checked on Windows: both exit with a
+      clear configuration error when `LLM_API_KEY` is unset)
+- [x] `docs/DESIGN.md` (≤1 page, before/after scores with the split final run disclosed, one
+      real-clinic change)
+- [x] `docs/INCIDENT.md` (≤½ page, uses the E6 trace `064320Z`)
+- [x] Rubric and blind spots: in `docs/EVALUATION.md` ("Why grading reads the EHR, not the
+      transcript" and "Known limits"); no separate RUBRIC.md
+- [x] `docs/AI_USAGE.md` complete
+- [x] Final checks: 230 tests pass; Ruff check and format clean; no secrets or `.env` tracked
+- [ ] Optional: one more full real-Gemini run for a single 6/6 record. Not attempted during
+      finalisation: no `LLM_API_KEY` was available in that environment. The split-run disclosure
+      stands.
+- [ ] Total time recorded (owner; placeholder above)
 - [ ] Screen recording (owner)
