@@ -137,7 +137,7 @@ gating checks for unverified claims and duplicate records; scenarios in JSON val
 
 ## ADR-014a — Evaluation as built (M3)
 **Status:** Accepted (owner's M3 brief)
-**Decision:** Six scenarios E1-E6 defined in Python (`evals/scenarios.py`) instead of JSON: each
+**Decision:** Six scenarios E1-E6 defined in Python (`src/care_agent/evals/scenarios.py`) instead of JSON: each
 expectation is a small explicit function over EHR state, which JSON could not express without a
 mini-language. Real Gemini model; fixed scripted caller turns; fixed clock; fresh seeded database per
 scenario; one run per scenario. Grading: scenario expectations plus `claims_match_ehr`. A model API

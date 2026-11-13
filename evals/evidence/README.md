@@ -27,10 +27,12 @@ error (429 RESOURCE_EXHAUSTED on the free tier): it is not graded and never coun
 | `20261113T064153Z` | `113367f` | E3 | E3 | | | 0 | Final E3 |
 | `20261113T064320Z` | `113367f` | E6 | E6 | | | 0 | Final E6 |
 
-**Final state:** on the final code (`113367f`) every scenario has passed at least once: E1, E2,
+**Final state:** on the final agent code (`113367f`) every scenario has passed at least once: E1, E2,
 E4, E5 in `063923Z`, E3 in `064153Z`, E6 in `064320Z` (and `063830Z`). This was **not** one clean
 6/6 run: the full run lost E3 and E6 to the free-tier rate limit and they were re-run on their own.
-No scenario failed on the final code.
+No scenario failed on that code. Later commits add only rate-limit handling, a baseline option,
+a code comment, tests and docs; the agent's prompt, tools, guard and loop are unchanged. No
+real-model run has been recorded on those later commits.
 
 ## Earlier runs (before `--record-evidence` existed)
 

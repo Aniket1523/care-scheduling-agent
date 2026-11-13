@@ -135,7 +135,7 @@ overnight break, so it does not establish time spent.
       as pass, and `--update-baseline` from split runs would add nothing
 
 ### Original plan items not built (superseded or descoped)
-- Scenario JSON files and 8–10 scenarios: scenarios are Python (`evals/scenarios.py`), six of them
+- Scenario JSON files and 8–10 scenarios: scenarios are Python (`src/care_agent/evals/scenarios.py`), six of them
 - Tags `v0-baseline` / `v1`: not created; commits and evidence files carry the history
 - Audit log table and seed-data module (M1): deferred; see INCIDENT.md "Honest gap"
 
@@ -148,7 +148,7 @@ overnight break, so it does not establish time spent.
 - [x] Rubric and blind spots: in `docs/EVALUATION.md` ("Why grading reads the EHR, not the
       transcript" and "Known limits"); no separate RUBRIC.md
 - [x] `docs/AI_USAGE.md` complete
-- [x] Final checks: 230 tests pass; Ruff check and format clean; no secrets or `.env` tracked
+- [x] Final checks at `8f2852a`: 230 tests pass; Ruff check and format clean; no secrets or `.env` tracked
 - [x] M6 final tasks: E6 `checkup_unchanged` proven able to fail (`3d05253`); rate-limit pacing
       and backoff, persistent 429 graded `error` (`8692e8f`); `--rebuild-baseline` from one complete
       run, original baseline copied to `evals/baseline-history/` (`464a98d`); verified before/fix

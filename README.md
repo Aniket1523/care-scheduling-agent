@@ -5,7 +5,7 @@ something happened unless the (mock) EHR shows that it happened. The repository 
 small in-process mock EHR with fault injection, and an evaluation harness with an improvement loop and a
 regression gate.
 
-> Status: complete. All six evaluation scenarios passed with real Gemini on the final code. The
+> Status: complete. All six evaluation scenarios passed with real Gemini on the final agent code (`113367f`). The
 > final verification was split across three runs because of free-tier rate limits; see
 > [docs/DESIGN.md](docs/DESIGN.md) and [evals/evidence/README.md](evals/evidence/README.md).
 

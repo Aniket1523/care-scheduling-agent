@@ -44,11 +44,12 @@ tests, and the same scenarios are run again. `--record-evidence` saves a sanitis
 | | E1 | E2 | E3 | E4 | E5 | E6 |
 |---|---|---|---|---|---|---|
 | Before: `053628Z` | pass | **fail** | pass | error (429) | error (429) | **fail** |
-| After: final code `113367f` | pass | pass | pass¹ | pass | pass | pass¹ |
+| After: agent code `113367f` | pass | pass | pass¹ | pass | pass | pass¹ |
 
 ¹ The full run `063923Z` hit the free-tier rate limit on E3 and E6, so they were re-run alone
-(`064153Z`, `064320Z`): all six passed on the final code, but **not in a single 6/6 run**. The
-measured fail→pass changes are E2 (IMP-004) and E6 (IMP-003). There is no complete "before" score,
+(`064153Z`, `064320Z`): all six passed on that code, but **not in a single 6/6 run**. Later
+commits add only rate-limit handling, a baseline option, a code comment, tests and docs; the
+agent's prompt, tools and guard are unchanged. The measured fail→pass changes are E2 (IMP-004) and E6 (IMP-003). There is no complete "before" score,
 and the older 6/6 baseline (`160955Z`) used weaker checks. No scenario regressed.
 
 ## Limitations
