@@ -202,7 +202,13 @@ def failed(code: str, message: str, *, action_id: str | None = None, guidance: s
     return result
 
 
-_TELL_THE_TRUTH = "Tell the patient it did not go through. Do not say it succeeded."
+# IMP-003 (run 20261113T063300Z): the model escalated in the same turn as a failed retry, so the
+# guidance says that a callback is only offered here, never requested.
+_TELL_THE_TRUTH = (
+    "Tell the patient it did not go through. Do not say it succeeded. "
+    "If useful, offer a staff callback and wait for the caller's answer before calling "
+    "escalate_to_staff. Do not call escalate_to_staff in this turn."
+)
 
 
 class ToolRunner:

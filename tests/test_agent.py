@@ -931,3 +931,42 @@ def test_prompt_states_the_consent_policy_without_scenario_wording():
     for scenario in SCENARIOS:  # no caller line from the evaluation is quoted to the model
         for line in scenario.patient_turns:
             assert line not in prompt
+
+
+def test_prompt_says_wait_for_the_callers_answer_before_escalating_after_a_failure():
+    # Run 20261113T063300Z, E6: the agent escalated in the same turn as a failed retry.
+    from care_agent.agent.prompt import build_system_prompt
+    from care_agent.evals.scenarios import SCENARIOS
+
+    flat = " ".join(build_system_prompt(NOW.date()).split())
+    assert "When an action fails, explain the failure and, if appropriate, ask whether" in flat
+    assert "wait for the caller's response before escalating" in flat
+    assert "never call escalate_to_staff in the same turn as the failed action" in flat
+    assert "accepts the original action again (asking you to retry it) is not acceptance" in flat
+    assert "only when the caller explicitly asks for staff contact, or clearly accepts" in flat
+    for scenario in SCENARIOS:
+        for line in scenario.patient_turns:
+            assert line not in flat
+
+
+def test_failed_write_guidance_offers_a_callback_without_escalating(ehr):
+    faults = FaultPlan({"cancel_appointment": [FaultMode.TIMEOUT_BEFORE_COMMIT] * 3})
+    agent, model, state = make_agent(
+        ehr,
+        [
+            call("verify_identity", **MARIA),
+            call("cancel_appointment", appointment_id=MARIA_APT),
+            reply("Sorry, the cancellation did not go through. Shall I ask staff to call you?"),
+        ],
+        faults=faults,
+    )
+    agent.respond("Maria Garcia 1985-03-14, cancel my check-up")
+    result = result_of(model, 2)
+    assert result["status"] == "failed"
+    guidance = result["guidance"]
+    assert "Tell the patient it did not go through. Do not say it succeeded." in guidance
+    assert "offer a staff callback and wait for the caller's answer" in guidance
+    assert "before calling escalate_to_staff" in guidance
+    assert "Do not call escalate_to_staff in this turn." in guidance
+    assert all(e.operation != "create_escalation" for e in state.ledger.entries.values())
+    model.assert_finished()
