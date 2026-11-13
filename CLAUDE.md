@@ -1,5 +1,9 @@
 # CLAUDE.md — Care Scheduling Agent
 
+> These are the working instructions for the AI coding assistant (Claude Code) used on this
+> project. Claude Code reads this file from the repository root. Where AI helped, and where human
+> judgment overrode it, is recorded in `docs/AI_USAGE.md`.
+
 ## Project context
 
 Take-home for 2care.ai (Software Engineer, Voice AI): a patient-appointment scheduling agent that
@@ -9,8 +13,9 @@ Take-home for 2care.ai (Software Engineer, Voice AI): a patient-appointment sche
 2. An in-process mock EHR (SQLite) that can time out and return an error after creating a record.
 3. An evaluation harness + human-reviewed improvement loop with a regression gate.
 
-The assignment PDF in `docs/` is the source of truth (git-ignored). Approved design:
-`docs/design/ANALYSIS.md`; decisions: `docs/design/DECISIONS.md`; status/time: `docs/PROGRESS.md`.
+The assignment PDF in `docs/` is the source of truth (git-ignored). Pre-build plan (not the as-built
+design): `docs/internal/ANALYSIS.md`; decisions: `docs/design/DECISIONS.md`; as-built design:
+`docs/DESIGN.md`; status/time: `docs/internal/PROGRESS.md`.
 
 The core invariant: **the agent never tells a patient something happened unless the backend shows it.**
 
@@ -34,7 +39,7 @@ The core invariant: **the agent never tells a patient something happened unless 
 11. Preserve meaningful Git history; no squashing. Commit only when the user asks.
 12. No architectural change without explanation and approval — record approved changes in `DECISIONS.md`.
 13. Do not silently omit assignment requirements or invent ones that contradict it.
-14. Keep `docs/PROGRESS.md` (checklist) and `docs/AI_USAGE.md` (where AI helped / where judgment overrode it) current.
+14. Keep `docs/internal/PROGRESS.md` (checklist) and `docs/AI_USAGE.md` (where AI helped / where judgment overrode it) current.
 
 ## Stack
 
@@ -89,7 +94,8 @@ evals/            baseline.json, evidence/ (scenarios live in src/care_agent/eva
 improvements/     IMP-NNN.md (human-reviewed; drafted with Claude Code)
 manual-tests/     manual real-model test records
 runs/             eval outputs + traces (git-ignored)
-docs/             design/, PROGRESS.md, AI_USAGE.md, DESIGN.md, INCIDENT.md, EVALUATION.md
+docs/             DESIGN.md, INCIDENT.md, EVALUATION.md, AI_USAGE.md, design/DECISIONS.md,
+                  internal/ (PROGRESS.md, ANALYSIS.md)
 ```
 
 The rubric and its blind spots are in `docs/EVALUATION.md`; there is no separate RUBRIC.md.
