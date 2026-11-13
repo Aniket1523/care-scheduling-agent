@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from care_agent.agent.gemini import GeminiClient
+from care_agent.agent.gemini import GeminiClient, RateLimitedClient
 from care_agent.agent.loop import Agent, ModelClient
 from care_agent.agent.prompt import build_system_prompt
 from care_agent.agent.state import ConversationState
@@ -51,7 +51,9 @@ def run_chat(
     if client is None:
         try:
             settings = LLMSettings.from_env(environ)
-            client = GeminiClient(settings, build_system_prompt(clock().date()), TOOL_DECLARATIONS)
+            client = RateLimitedClient(
+                GeminiClient(settings, build_system_prompt(clock().date()), TOOL_DECLARATIONS)
+            )
         except ConfigError as exc:
             print(f"Configuration error: {exc}", file=sys.stderr)
             return EXIT_CONFIG_ERROR

@@ -74,6 +74,12 @@ Exit codes:
 | 1 | A scenario that passed in `evals/baseline.json` now fails |
 | 2 | The run could not complete: missing configuration or a model API error |
 
+**Rate limits.** A real run spaces model calls at least 4 seconds apart (free-tier per-minute
+limits). A 429 / `RESOURCE_EXHAUSTED` is retried up to 5 attempts with exponential backoff and
+jitter (about 5, 10, 20, 40 seconds). The request is identical each time, so the agent's decisions
+do not change. If the limit persists, the scenario is reported as `error` (`RateLimitedClient` in
+`agent/gemini.py`; tests in `tests/test_rate_limits.py`). A full run therefore takes a few minutes.
+
 A model API error marks the scenario `error`, not `fail`: it says nothing about agent behaviour and
 never changes the baseline. `--update-baseline` is refused while any regression is present.
 

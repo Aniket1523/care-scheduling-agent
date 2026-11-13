@@ -44,6 +44,9 @@ EXIT_INCOMPLETE = 2
 DEFAULT_BASELINE = Path("evals/baseline.json")
 DEFAULT_RUNS_DIR = Path("runs")
 DEFAULT_EVIDENCE_DIR = Path("evals/evidence")
+# Seconds between model calls in a real evaluation run, to stay under free-tier
+# per-minute limits (about 15 requests per minute).
+EVAL_MIN_CALL_INTERVAL = 4.0
 
 
 def load_baseline(path: Path) -> dict[str, str]:
@@ -80,7 +83,7 @@ def run_eval(
     scenarios = [SCENARIOS_BY_ID[s] for s in scenario_ids] if scenario_ids else list(SCENARIOS)
 
     if client_factory is None:
-        from care_agent.agent.gemini import GeminiClient
+        from care_agent.agent.gemini import GeminiClient, RateLimitedClient
         from care_agent.agent.prompt import build_system_prompt
         from care_agent.agent.tools import TOOL_DECLARATIONS
         from care_agent.config import ConfigError, LLMSettings
@@ -88,7 +91,10 @@ def run_eval(
 
         try:
             settings = LLMSettings.from_env()
-            client = GeminiClient(settings, build_system_prompt(EVAL_NOW.date()), TOOL_DECLARATIONS)
+            client = RateLimitedClient(
+                GeminiClient(settings, build_system_prompt(EVAL_NOW.date()), TOOL_DECLARATIONS),
+                min_interval=EVAL_MIN_CALL_INTERVAL,
+            )
             model_label = f"{settings.provider}/{settings.model}"
         except ConfigError as exc:
             print(f"Configuration error: {exc}", file=sys.stderr)
