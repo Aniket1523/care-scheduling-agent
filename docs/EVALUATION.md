@@ -140,14 +140,23 @@ the runs and their findings.
 
 ## Improvement loop (human-reviewed)
 
-1. Run `eval` and record an honest baseline (`--update-baseline`). Commit `evals/baseline.json`.
+1. Record an honest baseline from one complete run, then commit `evals/baseline.json` and the
+   evidence file:
+
+   ```bat
+   python -m care_agent eval --rebuild-baseline --record-evidence
+   ```
+
+   This is the preferred way: it replaces the baseline only if all six scenarios ran with no
+   `error` and no regression. `--update-baseline` remains supported but merges: it updates only the
+   scenarios that ran and keeps old entries for errored ones, so the result can mix runs.
 2. For each genuine failure, read `failures.json` and the trace, then write
    `improvements/IMP-NNN.md` from `improvements/TEMPLATE.md`: observation, root cause, fix layer,
    change, expected effect.
 3. After review, implement the fix in its own commit referencing `IMP-NNN`.
 4. Re-run the same scenarios. The summary shows the baseline score next to the new score; exit code 1
    means something that used to pass now fails.
-5. When the result is accepted, run with `--update-baseline` and commit the baseline and the
+5. When the result is accepted, rebuild the baseline as in step 1 and commit it with the
    completed improvement record (with before/after scores).
 
 Nothing modifies source code automatically. Tests and scenarios are never weakened to gain a score.

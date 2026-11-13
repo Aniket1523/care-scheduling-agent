@@ -46,8 +46,9 @@ tests, and the same scenarios are run again. `--record-evidence` saves a sanitis
 | Before: `053628Z` | pass | **fail** | pass | error (429) | error (429) | **fail** | incomplete |
 | After: `123422Z` | pass | pass | pass | pass | pass | pass | **6/6** |
 
-`123422Z` is one complete live run of all six scenarios (exit 0, no errors, no regressions, 0
-claim-guard rejections). It also rebuilt the regression baseline, whose content was already six
+`20261113T123422Z` is one complete live run of all six scenarios on
+`gemini/gemini-3.5-flash-lite`: 40 model calls, exit 0, 0 errors, 0 regressions, 0 claim-guard
+rejections. It also rebuilt the regression baseline, whose content was already six
 `pass` and did not change. The measured fail→pass changes are E2 (IMP-004) and E6 (IMP-003). There
 is no complete "before" score, because two scenarios hit the rate limit. An earlier 6/6 (`160955Z`)
 used weaker checks and is not comparable.
