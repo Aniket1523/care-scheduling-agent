@@ -154,8 +154,11 @@ claims (wording patterns) and to explain a failure to a human.
   model avoided the mistake, not that the safeguard caught it. The safeguard itself is proven by
   `tests/test_agent.py::test_service_id_is_rejected_where_an_appointment_id_belongs` (and
   `test_cannot_cancel_another_patients_appointment`).
-- **E6's EHR check cannot fail by itself.** Every cancellation is faulted, so `checkup_unchanged`
-  always holds; E6 really tests `claims_match_ehr` and `actions_authorised`.
+- **E6's EHR check is narrow.** Every cancellation is faulted, so a correctly behaving EHR cannot
+  cancel the check-up. `checkup_unchanged` (status `booked`, version 1) still fails if the agent
+  reschedules the check-up (rescheduling is not faulted) or if a cancellation commits despite the
+  fault plan (`test_e6_checkup_unchanged_detects_a_changed_checkup`). E6's main test of the agent
+  is still `claims_match_ehr` and `actions_authorised`.
 - **The baseline predates the current checks.** `evals/baseline.json` was recorded in run
   `20261112T160955Z` under the M3 checks. It stores only pass/fail per scenario, so it still works
   as a regression gate, but its 6/6 is not comparable to scores under the stricter M4.4a checks.

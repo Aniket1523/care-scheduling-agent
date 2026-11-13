@@ -326,6 +326,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         # The EHR rejects every cancellation attempt in this call.
         faults=lambda: FaultPlan({"cancel_appointment": [FaultMode.TIMEOUT_BEFORE_COMMIT] * 30}),
         expectations=(
+            # Only cancellation is faulted, so this still fails if the agent reschedules the
+            # check-up or a cancellation commits despite the fault plan (tested).
             Expectation(
                 "checkup_unchanged",
                 lambda conn, call, ledger: (

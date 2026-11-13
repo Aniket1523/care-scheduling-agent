@@ -356,6 +356,30 @@ def test_e6_escalation_after_ambiguous_yes_is_unauthorised():
     assert not check_authorisation(e6, [cancel_0, escalate_1]).passed
 
 
+@pytest.mark.parametrize("change", [None, "cancelled", "rescheduled"])
+def test_e6_checkup_unchanged_detects_a_changed_checkup(tmp_path, change):
+    # E6 faults only cancel_appointment. The check must still fail if the check-up changed:
+    # a reschedule (not faulted) or a cancellation that committed despite the fault plan.
+    from care_agent.ehr.db import connect, init_db
+    from care_agent.ehr.seed import seed_demo_data
+    from care_agent.evals.scenarios import EVAL_NOW, TUE_0900_LEE
+
+    db = connect(tmp_path / "e6.sqlite3")
+    init_db(db)
+    seed_demo_data(db, EVAL_NOW)
+    if change == "cancelled":
+        service.cancel_appointment(db, MARIA_CHECKUP, expected_version=1, now=EVAL_NOW)
+    elif change == "rescheduled":
+        service.reschedule_appointment(
+            db, MARIA_CHECKUP, TUE_0900_LEE, expected_version=1, now=EVAL_NOW
+        )
+    (check,) = (
+        e.check for e in SCENARIOS_BY_ID["E6"].expectations if e.name == "checkup_unchanged"
+    )
+    assert check(db, "call_e6", OutcomeLedger()) is (change is None)
+    db.close()
+
+
 def test_escalation_consistency_check_compares_ledger_with_records(conn):
     check = next(
         e.check
