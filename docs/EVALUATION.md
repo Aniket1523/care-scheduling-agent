@@ -99,9 +99,9 @@ These are not interchangeable:
 
 | | What it is | Where |
 |---|---|---|
-| **Regression baseline** | The per-scenario pass/fail list the gate compares each run against. It decides exit code 1. | `evals/baseline.json`. Currently all six `pass`, from run `20261112T160955Z` under the older M3 checks (copy kept in `evals/baseline-history/20261112T160955Z-m3-checks.json`). Rebuild with `--rebuild-baseline` to record a single complete run under the current checks. |
+| **Regression baseline** | The per-scenario pass/fail list the gate compares each run against. It decides exit code 1. | `evals/baseline.json`: all six `pass`. First recorded in `20261112T160955Z` under the older M3 checks (copy in `evals/baseline-history/20261112T160955Z-m3-checks.json`). Rebuilt with `--rebuild-baseline` in `20261113T123422Z` under the current checks: the result was again six `pass`, so the file's content did not change. |
 | **Historical pre-improvement score** | What the agent scored before IMP-002/003/004, under the current (M4.4a) checks | Run `20261113T053628Z`: E1 E3 pass, E2 E6 fail, E4 E5 error (429). Incomplete, so not a full score. |
-| **Final current-code score** | What the improved agent scored | E1 E2 E4 E5 in `20261113T063923Z`, E3 in `064153Z`, E6 in `064320Z` (also `063830Z`), all on commit `113367f`: six passes, but split across runs, not one 6/6 run. Later commits add rate-limit handling, the baseline rebuild option, a comment and tests; the agent's prompt, tools, guard and loop are unchanged. |
+| **Final current-code score** | What the improved agent scored, in one complete run | **6/6** in `20261113T123422Z` (`gemini-3.5-flash-lite`; exit 0; no errors or regressions; 40 model calls; 0 claim-guard rejections), on the code of `24d3c9a`. An earlier verification on `113367f` passed all six only across split runs (`063923Z`, `064153Z`, `064320Z`) because of rate limits. |
 
 See `evals/evidence/README.md` for every recorded run.
 
@@ -187,11 +187,12 @@ claims (wording patterns) and to explain a failure to a human.
   reschedules the check-up (rescheduling is not faulted) or if a cancellation commits despite the
   fault plan (`test_e6_checkup_unchanged_detects_a_changed_checkup`). E6's main test of the agent
   is still `claims_match_ehr` and `actions_authorised`.
-- **The baseline predates the current checks.** `evals/baseline.json` was recorded in run
-  `20261112T160955Z` under the M3 checks. It stores only pass/fail per scenario, so it still works
-  as a regression gate, but its 6/6 is not comparable to scores under the stricter M4.4a checks.
-- **The final evidence is split across runs.** See `evals/evidence/README.md`: free-tier rate
-  limits (429) stopped E3 and E6 in the final full run, and they were re-run alone.
+- **Historical scores are not comparable.** The 6/6 of `20261112T160955Z` was graded under the
+  older M3 checks (5/6 when regraded offline under the current ones). The final 6/6 is
+  `20261113T123422Z`, under the current checks. The pre-improvement run `20261113T053628Z` is
+  incomplete (two scenarios hit the rate limit), so there is no complete "before" score.
+- **One complete final run.** `20261113T123422Z` is a single run; the earlier verification on
+  `113367f` was split across runs because of free-tier limits (see `evals/evidence/README.md`).
 
 - **One run per scenario.** The model is not deterministic; a pass is evidence, not proof. Rare
   failures need repeated runs.

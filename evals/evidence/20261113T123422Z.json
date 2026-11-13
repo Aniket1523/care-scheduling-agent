@@ -1,0 +1,182 @@
+{
+  "run_id": "20261113T123422Z",
+  "model": "gemini/gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "score": {
+    "passed": 6,
+    "total": 6
+  },
+  "baseline_score": {
+    "passed": 6,
+    "total": 6
+  },
+  "regressions": [],
+  "scenarios": [
+    {
+      "id": "E1",
+      "failure_pattern": "F1",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "booking_exists_once": true,
+        "no_duplicate_appointments": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 5,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 0,
+          "tool": "book_appointment"
+        }
+      ],
+      "faults_injected": [
+        {
+          "operation": "book_appointment",
+          "mode": "timeout_after_commit"
+        }
+      ],
+      "error_type": null
+    },
+    {
+      "id": "E2",
+      "failure_pattern": "F2",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "escalation_exists_once": true,
+        "escalation_actions_match_records": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 6,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 0,
+          "tool": "escalate_to_staff"
+        }
+      ],
+      "faults_injected": [
+        {
+          "operation": "create_escalation",
+          "mode": "error_after_commit"
+        }
+      ],
+      "error_type": null
+    },
+    {
+      "id": "E3",
+      "failure_pattern": "F3",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "booked_for_maria": true,
+        "nothing_booked_for_luis": true,
+        "no_duplicate_patient": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 8,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 1,
+          "tool": "book_appointment"
+        }
+      ],
+      "faults_injected": [],
+      "error_type": null
+    },
+    {
+      "id": "E4",
+      "failure_pattern": "F4",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "checkup_cancelled": true,
+        "no_other_changes": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 6,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 0,
+          "tool": "cancel_appointment"
+        }
+      ],
+      "faults_injected": [],
+      "error_type": null
+    },
+    {
+      "id": "E5",
+      "failure_pattern": "F5",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "cancelled_appointment_not_moved": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 9,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 1,
+          "tool": "reschedule_appointment"
+        }
+      ],
+      "faults_injected": [],
+      "error_type": null
+    },
+    {
+      "id": "E6",
+      "failure_pattern": "F1 (cancel)",
+      "baseline": "pass",
+      "status": "pass",
+      "checks": {
+        "checkup_unchanged": true,
+        "claims_match_ehr": true,
+        "actions_authorised": true,
+        "ledger_matches_ehr": true
+      },
+      "failed_checks": [],
+      "model_calls": 6,
+      "guard_rejections": 0,
+      "write_attempts": [
+        {
+          "turn": 0,
+          "tool": "cancel_appointment"
+        }
+      ],
+      "faults_injected": [
+        {
+          "operation": "cancel_appointment",
+          "mode": "timeout_before_commit"
+        },
+        {
+          "operation": "cancel_appointment",
+          "mode": "timeout_before_commit"
+        },
+        {
+          "operation": "cancel_appointment",
+          "mode": "timeout_before_commit"
+        }
+      ],
+      "error_type": null
+    }
+  ]
+}

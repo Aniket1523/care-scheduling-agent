@@ -142,8 +142,7 @@ overnight break, so it does not establish time spent.
 ### M6 — Submission
 - [x] README with one agent command and one eval command (checked on Windows: both exit with a
       clear configuration error when `LLM_API_KEY` is unset)
-- [x] `docs/DESIGN.md` (≤1 page, before/after scores with the split final run disclosed, one
-      real-clinic change)
+- [x] `docs/DESIGN.md` (≤1 page, before/after scores, one real-clinic change)
 - [x] `docs/INCIDENT.md` (≤½ page, uses the E6 trace `064320Z`)
 - [x] Rubric and blind spots: in `docs/EVALUATION.md` ("Why grading reads the EHR, not the
       transcript" and "Known limits"); no separate RUBRIC.md
@@ -153,10 +152,13 @@ overnight break, so it does not establish time spent.
       and backoff, persistent 429 graded `error` (`8692e8f`); `--rebuild-baseline` from one complete
       run, original baseline copied to `evals/baseline-history/` (`464a98d`); verified before/fix
       commit pairs in `evals/evidence/README.md` (`3413af8`); reviewer-facing cleanup, internal docs
-      moved to `docs/internal/` (`c0f6a89`). 244 tests pass; Ruff clean. The baseline itself is
-      unchanged; the rebuild command is for the owner to run.
-- [ ] Optional: one more full real-Gemini run for a single 6/6 record. Not attempted during
-      finalisation: no `LLM_API_KEY` was available in that environment. The split-run disclosure
-      stands.
+      moved to `docs/internal/` (`c0f6a89`). 244 tests pass; Ruff clean.
+- [x] Final live evaluation and baseline rebuild (owner run, `20261113T123422Z`):
+      `python -m care_agent eval --rebuild-baseline --record-evidence`, `gemini-3.5-flash-lite`,
+      exit 0, **6/6** in one complete run under the current checks, no errors, no regressions,
+      40 model calls, 0 guard rejections. The rebuild wrote six `pass`, identical to the committed
+      baseline, so `evals/baseline.json` did not change. Evidence:
+      `evals/evidence/20261113T123422Z.json`. This replaces the earlier split verification on
+      `113367f` as the final result.
 - [ ] Total time recorded (owner; placeholder above)
 - [ ] Screen recording (owner)

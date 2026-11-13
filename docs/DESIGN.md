@@ -39,18 +39,18 @@ exit 2 means the run could not complete (for example, an API error). A human wri
 tests, and the same scenarios are run again. `--record-evidence` saves a sanitised summary to
 `evals/evidence/`.
 
-## Before and after (real Gemini, `gemini-3.5-flash-lite`, one run per scenario)
+## Before and after (real Gemini, `gemini-3.5-flash-lite`, current checks)
 
-| | E1 | E2 | E3 | E4 | E5 | E6 |
-|---|---|---|---|---|---|---|
-| Before: `053628Z` | pass | **fail** | pass | error (429) | error (429) | **fail** |
-| After: agent code `113367f` | pass | pass | pass¹ | pass | pass | pass¹ |
+| | E1 | E2 | E3 | E4 | E5 | E6 | Score |
+|---|---|---|---|---|---|---|---|
+| Before: `053628Z` | pass | **fail** | pass | error (429) | error (429) | **fail** | incomplete |
+| After: `123422Z` | pass | pass | pass | pass | pass | pass | **6/6** |
 
-¹ The full run `063923Z` hit the free-tier rate limit on E3 and E6, so they were re-run alone
-(`064153Z`, `064320Z`): all six passed on that code, but **not in a single 6/6 run**. Later
-commits add only rate-limit handling, a baseline option, a code comment, tests and docs; the
-agent's prompt, tools and guard are unchanged. The measured fail→pass changes are E2 (IMP-004) and E6 (IMP-003). There is no complete "before" score,
-and the older 6/6 baseline (`160955Z`) used weaker checks. No scenario regressed.
+`123422Z` is one complete live run of all six scenarios (exit 0, no errors, no regressions, 0
+claim-guard rejections). It also rebuilt the regression baseline, whose content was already six
+`pass` and did not change. The measured fail→pass changes are E2 (IMP-004) and E6 (IMP-003). There
+is no complete "before" score, because two scenarios hit the rate limit. An earlier 6/6 (`160955Z`)
+used weaker checks and is not comparable.
 
 ## Limitations
 

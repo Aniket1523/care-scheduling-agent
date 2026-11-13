@@ -23,16 +23,35 @@ error (429 RESOURCE_EXHAUSTED on the free tier): it is not graded and never coun
 | `20261113T062940Z` | `228481a` (IMP-003 step 2) | E5 E6 | E5 | | E6 | 2 | E5 fixed |
 | `20261113T063300Z` | `228481a` | E6 | | E6 | | 1 | Escalation in the turn of a failed retry (IMP-003 step 3) |
 | `20261113T063830Z` | `113367f` (IMP-003 step 3) | E6 | E6 | | | 0 | |
-| `20261113T063923Z` | `113367f` | all 6 | E1 E2 E4 E5 | | E3 E6 | 2 | **Final full run**; two scenarios hit the quota |
-| `20261113T064153Z` | `113367f` | E3 | E3 | | | 0 | Final E3 |
-| `20261113T064320Z` | `113367f` | E6 | E6 | | | 0 | Final E6 |
+| `20261113T063923Z` | `113367f` | all 6 | E1 E2 E4 E5 | | E3 E6 | 2 | Full run; two scenarios hit the quota |
+| `20261113T064153Z` | `113367f` | E3 | E3 | | | 0 | E3 re-run |
+| `20261113T064320Z` | `113367f` | E6 | E6 | | | 0 | E6 re-run |
+| `20261113T123422Z` | `24d3c9a` (agent code unchanged since `113367f`) | all 6 | all 6 | | | 0 | **Final: first complete 6/6 run.** `--rebuild-baseline --record-evidence`; 40 model calls, 0 guard rejections |
 
-**Final state:** on the final agent code (`113367f`) every scenario has passed at least once: E1, E2,
-E4, E5 in `063923Z`, E3 in `064153Z`, E6 in `064320Z` (and `063830Z`). This was **not** one clean
-6/6 run: the full run lost E3 and E6 to the free-tier rate limit and they were re-run on their own.
-No scenario failed on that code. Later commits add only rate-limit handling, a baseline option,
-a code comment, tests and docs; the agent's prompt, tools, guard and loop are unchanged. No
-real-model run has been recorded on those later commits.
+**Final state: run `20261113T123422Z`, 6/6** (`evals/evidence/20261113T123422Z.json`). This is the
+first complete live run of all six scenarios under the current checks: exit 0, no errors, no
+regressions, 40 model calls, 0 claim-guard rejections.
+
+| Scenario | E1 | E2 | E3 | E4 | E5 | E6 |
+|---|---|---|---|---|---|---|
+| Result | pass | pass | pass | pass | pass | pass |
+| Model calls | 5 | 6 | 8 | 6 | 9 | 6 |
+
+- Command: `python -m care_agent eval --rebuild-baseline --record-evidence`, model
+  `gemini-3.5-flash-lite`.
+- Code: the run started at 18:04:22 +05:30, about 3 minutes after commit `24d3c9a`. Source and
+  tests are identical from `464a98d` to `24d3c9a`, and the agent's prompt, tools, guard and loop
+  are unchanged since `113367f`. The evidence file does not record a commit hash or whether the
+  working tree was clean; this mapping comes from timestamps.
+- Baseline: the rebuild succeeded and wrote all six as `pass`. That is identical to the committed
+  `evals/baseline.json`, so the file's content did not change (Git shows no difference). Since
+  this run, the baseline's six `pass` entries are confirmed by one complete run under the current
+  checks. They were first recorded in `20261112T160955Z` under the older M3 checks (copy in
+  `evals/baseline-history/`).
+
+**Earlier split verification on `113367f` (kept for the record):** every scenario passed at least
+once, but not in one run. E1, E2, E4 and E5 passed in `063923Z`; E3 (`064153Z`) and E6 (`064320Z`,
+also `063830Z`) passed when re-run alone after free-tier rate limits.
 
 ## Earlier runs (before `--record-evidence` existed)
 
